@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+import re
+import shutil
+import subprocess
+import sys
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, TypeVar
@@ -15,6 +19,7 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 from rich.theme import Theme
+from rich.tree import Tree
 
 from contextctl import (
     REPO_CONFIG_FILENAME,
@@ -35,6 +40,8 @@ from contextctl import (
     load_prompt,
     load_repo_config,
     load_rule,
+    scan_prompts_dir,
+    scan_rules_dir,
     search_prompts,
     sync_central_repo,
 )
@@ -99,6 +106,10 @@ _PROMPT_FILE_SUFFIXES: Final[tuple[str, ...]] = (".md", ".markdown")
 _DEFAULT_PAGE_SIZE: Final[int] = 20
 _MAX_PAGE_SIZE: Final[int] = 200
 _SNIPPET_CONTEXT_CHARS: Final[int] = 120
+_PROMPT_OUTPUT_FORMATS: Final[tuple[str, ...]] = ("text", "json")
+_VARIABLE_PATTERN: Final[re.Pattern[str]] = re.compile(r"{{\s*([A-Za-z0-9_.-]+)\s*}}")
+_REPO_MATCH_ICON: Final[str] = "[success]●[/success]"
+_REPO_NON_MATCH_ICON: Final[str] = "[dim]○[/dim]"
 
 DocumentT = TypeVar("DocumentT")
 
@@ -424,6 +435,183 @@ def search(
         include_repo_filter=not all_prompts,
         filtered_tags=tag_filters,
         exact=exact,
+    )
+
+
+@app.command()
+def run(
+    ctx: typer.Context,
+    prompt_id: str = typer.Argument(..., help="Prompt identifier to render."),
+    var: list[str] | None = typer.Option(
+        None,
+        "--var",
+        "-v",
+        help="Provide key=value pairs to substitute within the prompt body.",
+    ),
+    output_format: str | None = typer.Option(
+        None,
+        "--format",
+        "-f",
+        help="Output format for the rendered prompt (text or json).",
+    ),
+    copy_to_clipboard: bool = typer.Option(
+        False,
+        "--copy",
+        help="Copy the rendered prompt to the clipboard.",
+    ),
+    output_path: Path | None = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Write the rendered prompt to a file.",
+    ),
+    all_prompts: bool = typer.Option(
+        False,
+        "--all",
+        help="Allow running prompts that are not associated with the current repository.",
+    ),
+) -> None:
+    """Render a prompt by id with optional variable interpolation."""
+    state = _ensure_state(ctx)
+    if not state.prepared:
+        _prepare_environment(state)
+        if not state.prepared:
+            return
+
+    repo_config = state.repo_config
+    if repo_config is None:
+        _abort(state, "Repository configuration is not available.")
+        return
+    prompt_id = prompt_id.strip()
+    if not prompt_id:
+        _abort(state, "Prompt id cannot be blank.")
+        return
+
+    store_path = _require_store_path(state, repo_config)
+    try:
+        documents = _load_prompt_documents(store_path, repo_config.prompt_sets)
+    except ContentError as exc:
+        _abort(state, str(exc))
+        return
+
+    repo_slug = _resolve_repo_slug()
+    search_space = documents if all_prompts else filter_by_repo(documents, repo_slug)
+    document = _find_prompt_by_id(search_space, prompt_id)
+    if document is None:
+        scope = "all prompts" if all_prompts else f"repo '{repo_slug or 'unknown'}'"
+        available = ", ".join(sorted(doc.metadata.prompt_id for doc in search_space)) or "none"
+        msg = f"Prompt '{prompt_id}' was not found within {scope}. Available prompts: {available}."
+        _abort(state, msg)
+        return
+
+    try:
+        assignments = _parse_variable_assignments(var)
+    except ValueError as exc:
+        _abort(state, str(exc))
+        return
+
+    rendered_body, missing_vars, used_vars = _apply_prompt_variables(document.body, assignments)
+    unused_vars = sorted(set(assignments) - used_vars)
+
+    format_value = output_format or state.promptlib_config.default_output_format
+    normalized_format = format_value.strip().casefold() or "text"
+    if normalized_format not in _PROMPT_OUTPUT_FORMATS:
+        if output_format is None:
+            normalized_format = "text"
+        else:
+            supported = ", ".join(_PROMPT_OUTPUT_FORMATS)
+            _abort(state, f"Unsupported format '{format_value}'. Supported values: {supported}.")
+            return
+
+    formatted_output = _format_prompt_output(document, rendered_body, normalized_format, store_path)
+
+    if missing_vars:
+        state.console.print(
+            f"[warning]Missing values for variables: {', '.join(sorted(missing_vars))}. "
+            "Placeholders were left intact.[/warning]"
+        )
+    if unused_vars:
+        state.console.print(
+            f"[warning]Ignored variable assignments: {', '.join(unused_vars)}. "
+            "No matching placeholders were found.[/warning]"
+        )
+
+    state.console.print(formatted_output, markup=False)
+
+    if copy_to_clipboard:
+        try:
+            _copy_to_clipboard(formatted_output)
+        except RuntimeError as exc:
+            _abort(state, f"Unable to copy prompt to clipboard: {exc}")
+            return
+        state.console.print(f"[success]Copied prompt '{document.metadata.prompt_id}' to clipboard.[/success]")
+
+    if output_path is not None:
+        try:
+            written_path = _write_output_file(output_path, formatted_output)
+        except OSError as exc:
+            _abort(state, f"Unable to write output file: {exc}")
+            return
+        state.console.print(f"[success]Wrote prompt output to {written_path}[/success]")
+
+
+@app.command()
+def tree(
+    ctx: typer.Context,
+    collapse_prompts: bool = typer.Option(
+        False,
+        "--collapse-prompts",
+        help="Render the prompts section in a collapsed state.",
+    ),
+    collapse_rules: bool = typer.Option(
+        False,
+        "--collapse-rules",
+        help="Render the rules section in a collapsed state.",
+    ),
+    repo_only: bool = typer.Option(
+        False,
+        "--repo-only",
+        help="Only display prompts and rules associated with the current repository.",
+    ),
+) -> None:
+    """Render a hierarchical view of the prompt and rule library."""
+    state = _ensure_state(ctx)
+    if not state.prepared:
+        _prepare_environment(state)
+        if not state.prepared:
+            return
+
+    repo_config = state.repo_config
+    if repo_config is None:
+        _abort(state, "Repository configuration is not available.")
+        return
+
+    store_path = _require_store_path(state, repo_config)
+    try:
+        prompt_documents = scan_prompts_dir(store_path)
+    except ContentError as exc:
+        state.console.print(f"[warning]Unable to load prompts for tree view: {exc}[/warning]")
+        prompt_documents = []
+
+    try:
+        rule_documents = scan_rules_dir(store_path)
+    except ContentError as exc:
+        state.console.print(f"[warning]Unable to load rules for tree view: {exc}[/warning]")
+        rule_documents = []
+
+    repo_slug = _resolve_repo_slug()
+    if repo_only:
+        prompt_documents = filter_by_repo(prompt_documents, repo_slug)
+        rule_documents = filter_by_repo(rule_documents, repo_slug)
+
+    _render_library_tree(
+        state.console,
+        prompt_documents,
+        rule_documents,
+        store_path=store_path,
+        repo_slug=repo_slug,
+        collapse_prompts=collapse_prompts,
+        collapse_rules=collapse_rules,
     )
 
 
@@ -1193,3 +1381,249 @@ def _build_search_snippet(document: PromptDocument, query: str) -> str:
     prefix = "..." if start > 0 else ""
     suffix = "..." if end < len(body) else ""
     return f"{prefix}{highlighted}{suffix}"
+
+
+def _find_prompt_by_id(documents: Sequence[PromptDocument], prompt_id: str) -> PromptDocument | None:
+    """Return the prompt document whose id matches the provided value."""
+    normalized = prompt_id.strip().casefold()
+    if not normalized:
+        return None
+    for document in documents:
+        if document.metadata.prompt_id.casefold() == normalized:
+            return document
+    return None
+
+
+def _parse_variable_assignments(assignments: Sequence[str] | None) -> dict[str, str]:
+    """Parse `--var` key=value pairs into a dictionary."""
+    if not assignments:
+        return {}
+    parsed: dict[str, str] = {}
+    for assignment in assignments:
+        if "=" not in assignment:
+            msg = f"Invalid variable assignment '{assignment}'. Expected KEY=VALUE."
+            raise ValueError(msg)
+        key, value = assignment.split("=", 1)
+        normalized_key = key.strip()
+        if not normalized_key:
+            msg = "Variable names cannot be blank."
+            raise ValueError(msg)
+        parsed[normalized_key] = value
+    return parsed
+
+
+def _apply_prompt_variables(
+    body: str,
+    assignments: Mapping[str, str],
+) -> tuple[str, set[str], set[str]]:
+    """Substitute `{{variable}}` placeholders using the provided assignments."""
+    if not assignments:
+        return body, set(), set()
+
+    missing: set[str] = set()
+    used: set[str] = set()
+
+    def replacer(match: re.Match[str]) -> str:
+        key = match.group(1)
+        value = assignments.get(key)
+        if value is None:
+            missing.add(key)
+            return match.group(0)
+        used.add(key)
+        return value
+
+    rendered = _VARIABLE_PATTERN.sub(replacer, body)
+    return rendered, missing, used
+
+
+def _format_prompt_output(
+    document: PromptDocument,
+    body: str,
+    format_name: str,
+    store_path: Path,
+) -> str:
+    """Return the rendered prompt in the requested output format."""
+    if format_name == "text":
+        if body.endswith("\n"):
+            return body
+        return f"{body}\n"
+
+    if format_name == "json":
+        metadata = document.metadata
+        payload = {
+            "id": metadata.prompt_id,
+            "title": metadata.title,
+            "tags": metadata.tags,
+            "repos": metadata.repos,
+            "agents": metadata.agents,
+            "version": metadata.version,
+            "body": body,
+            "source": _relative_source(document.path, store_path),
+        }
+        return json.dumps(payload, indent=2, ensure_ascii=False)
+
+    msg = f"Unsupported prompt output format: {format_name}"
+    raise ValueError(msg)
+
+
+def _write_output_file(path: Path, content: str) -> Path:
+    """Persist rendered prompt content to disk and return the resulting path."""
+    target = path.expanduser()
+    if target.exists() and target.is_dir():
+        msg = f"{target} is a directory"
+        raise OSError(msg)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(content, encoding="utf-8")
+    return target.resolve()
+
+
+def _copy_to_clipboard(content: str) -> None:
+    """Copy the provided text to the system clipboard."""
+    try:
+        import pyperclip  # type: ignore[import-untyped]
+    except ImportError:  # pragma: no cover - optional dependency
+        pyperclip = None
+
+    if pyperclip is not None:  # pragma: no branch - simplified for readability
+        try:
+            pyperclip.copy(content)  # type: ignore[call-arg, unused-ignore]
+            return
+        except Exception as exc:  # pragma: no cover - pyperclip-specific
+            raise RuntimeError(str(exc)) from exc
+
+    platform = sys.platform
+    if platform == "darwin":
+        _run_clipboard_command(["pbcopy"], content)
+        return
+    if platform.startswith("win"):
+        _run_clipboard_command(["clip"], content)
+        return
+
+    for command in (["xclip", "-selection", "clipboard"], ["wl-copy"]):
+        if shutil.which(command[0]) is None:
+            continue
+        _run_clipboard_command(command, content)
+        return
+
+    msg = "Clipboard integration is not available on this platform."
+    raise RuntimeError(msg)
+
+
+def _run_clipboard_command(command: list[str], content: str) -> None:
+    """Execute a clipboard command with the provided string content."""
+    try:
+        subprocess.run(command, input=content.encode("utf-8"), check=True)
+    except (OSError, subprocess.CalledProcessError) as exc:  # pragma: no cover - platform dependent
+        msg = f"Clipboard command {' '.join(command)} failed: {exc}"
+        raise RuntimeError(msg) from exc
+
+
+def _render_library_tree(
+    console: Console,
+    prompts: Sequence[PromptDocument],
+    rules: Sequence[RuleDocument],
+    *,
+    store_path: Path,
+    repo_slug: str | None,
+    collapse_prompts: bool,
+    collapse_rules: bool,
+) -> None:
+    """Render a Rich tree describing the prompt and rule library."""
+    root = Tree("[bold]Prompt Library[/bold]", guide_style="text")
+
+    prompts_node = root.add("[bold]prompts[/bold]", expanded=not collapse_prompts)
+    _populate_tree_branch(
+        prompts_node,
+        prompts,
+        base_dir=store_path / "prompts",
+        repo_slug=repo_slug,
+    )
+    if not prompts:
+        prompts_node.add("[dim](no prompts discovered)[/dim]")
+
+    rules_node = root.add("[bold]rules[/bold]", expanded=not collapse_rules)
+    _populate_tree_branch(
+        rules_node,
+        rules,
+        base_dir=store_path / "rules",
+        repo_slug=repo_slug,
+    )
+    if not rules:
+        rules_node.add("[dim](no rules discovered)[/dim]")
+
+    console.print(root)
+
+
+def _populate_tree_branch(
+    root: Tree,
+    documents: Sequence[BaseDocument],
+    *,
+    base_dir: Path,
+    repo_slug: str | None,
+) -> None:
+    """Populate a Rich tree branch with document entries grouped by directory."""
+    if not documents:
+        return
+
+    node_cache: dict[tuple[str, ...], Tree] = {}
+
+    def sorter(document: BaseDocument) -> tuple[str, ...]:
+        relative = _relative_to_base(document.path, base_dir)
+        identifier = _document_identifier(document)
+        return (*relative.parts, identifier)
+
+    for document in sorted(documents, key=sorter):
+        relative_path = _relative_to_base(document.path, base_dir)
+        parent_parts = relative_path.parts[:-1]
+        current = root
+        accumulated: list[str] = []
+
+        for part in parent_parts:
+            accumulated.append(part)
+            key = tuple(accumulated)
+            current = node_cache.setdefault(key, current.add(part))
+
+        current.add(_format_tree_label(document, repo_slug))
+
+
+def _format_tree_label(document: BaseDocument, repo_slug: str | None) -> str:
+    """Return the textual label for a tree leaf node."""
+    identifier = _document_identifier(document)
+    metadata = document.metadata
+    relevant = _is_repo_relevant(metadata.repos, repo_slug)
+    icon = _REPO_MATCH_ICON if relevant else _REPO_NON_MATCH_ICON
+    tags = ", ".join(metadata.tags) or "-"
+    version = metadata.version
+    return f"{icon} {identifier} [dim](v{version}; tags: {tags})[/dim]"
+
+
+def _document_identifier(document: BaseDocument) -> str:
+    """Return the identifier for either a prompt or rule document."""
+    metadata = document.metadata
+    prompt_id = getattr(metadata, "prompt_id", None)
+    if isinstance(prompt_id, str):
+        return prompt_id
+    rule_id = getattr(metadata, "rule_id", None)
+    if isinstance(rule_id, str):
+        return rule_id
+    return document.path.stem
+
+
+def _is_repo_relevant(repos: Sequence[str], repo_slug: str | None) -> bool:
+    """Return True if the repo slug is included in the metadata repos."""
+    if not repos:
+        return True
+    if repo_slug is None:
+        return False
+    normalized = repo_slug.strip().casefold()
+    if not normalized:
+        return False
+    return any(repo.strip().casefold() == normalized for repo in repos)
+
+
+def _relative_to_base(path: Path, base_dir: Path) -> Path:
+    """Return path relative to base_dir, falling back to filename on mismatch."""
+    try:
+        return path.resolve().relative_to(base_dir.resolve())
+    except ValueError:
+        return Path(path.name)
