@@ -7,6 +7,16 @@ from .config import (
     find_repo_root,
     load_repo_config,
 )
+from .content import (
+    ContentError,
+    PromptDocument,
+    RuleDocument,
+    load_prompt,
+    load_rule,
+    parse_frontmatter,
+    scan_prompts_dir,
+    scan_rules_dir,
+)
 from .models import PromptLibConfig, PromptMetadata, RepoConfig, RuleMetadata
 from .store import (
     StoreSyncError,
@@ -19,9 +29,12 @@ from .store import (
 __all__ = [
     "REPO_CONFIG_FILENAME",
     "ConfigError",
+    "ContentError",
+    "PromptDocument",
     "PromptLibConfig",
     "PromptMetadata",
     "RepoConfig",
+    "RuleDocument",
     "RuleMetadata",
     "StoreSyncError",
     "clear_store_cache",
@@ -29,6 +42,11 @@ __all__ = [
     "ensure_store_root",
     "find_repo_root",
     "get_store_path",
+    "load_prompt",
     "load_repo_config",
+    "load_rule",
+    "parse_frontmatter",
+    "scan_prompts_dir",
+    "scan_rules_dir",
     "sync_central_repo",
 ]

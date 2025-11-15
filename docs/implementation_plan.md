@@ -64,14 +64,14 @@ CLI Command → Sync Central Repo → Load Config → Parse Metadata → Execute
 ### Phase 3: Content Parsing & Indexing
 **Goal:** Parse YAML frontmatter and build prompt/rule index
 
-24. [ ] Implement `parse_frontmatter()` to extract YAML metadata from markdown files
-25. [ ] Implement `load_prompt()` to parse individual prompt files
-26. [ ] Implement `load_rule()` to parse rule files
-27. [ ] Add validation for required metadata fields
-28. [ ] Implement `scan_prompts_dir()` to index all prompts in store
-29. [ ] Implement `scan_rules_dir()` to index all rules in store
-30. [ ] Write unit tests for frontmatter parsing and indexing
-31. [ ] Create test fixtures for sample prompts/rules with various metadata
+24. [x] Implement `parse_frontmatter()` to extract YAML metadata from markdown files
+25. [x] Implement `load_prompt()` to parse individual prompt files
+26. [x] Implement `load_rule()` to parse rule files
+27. [x] Add validation for required metadata fields
+28. [x] Implement `scan_prompts_dir()` to index all prompts in store
+29. [x] Implement `scan_rules_dir()` to index all rules in store
+30. [x] Write unit tests for frontmatter parsing and indexing
+31. [x] Create test fixtures for sample prompts/rules with various metadata
 
 ### Phase 4: Filtering & Search Engine
 **Goal:** Implement filtering and search capabilities
