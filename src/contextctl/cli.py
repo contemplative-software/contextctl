@@ -140,7 +140,12 @@ def init(ctx: typer.Context) -> None:
     else:
         if state.force_sync:
             store_path = get_store_path(state.promptlib_config, central_repo)
-            clear_store_cache(store_path)
+            store_root = state.promptlib_config.store_root
+            try:
+                store_path.relative_to(store_root)
+                clear_store_cache(store_path)
+            except ValueError:
+                pass  # Don't clear local stores; they're not caches
         preview = _load_store_preview(
             central_repo,
             promptlib_config=state.promptlib_config,
