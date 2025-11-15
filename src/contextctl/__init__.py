@@ -1,5 +1,12 @@
 """Public exports for the contextctl package."""
 
+from __future__ import annotations
+
+import tomllib
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as pkg_version
+from pathlib import Path
+
 from .config import (
     REPO_CONFIG_FILENAME,
     ConfigError,
@@ -30,6 +37,33 @@ from .store import (
     sync_central_repo,
 )
 
+
+def _load_local_version() -> str:
+    """Return the package version declared in pyproject.toml when metadata is unavailable."""
+    pyproject_path = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    try:
+        raw_text = pyproject_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return "0.0.0"
+
+    try:
+        data = tomllib.loads(raw_text)
+    except tomllib.TOMLDecodeError:
+        return "0.0.0"
+
+    project_section = data.get("project")
+    if isinstance(project_section, dict):
+        version_value = project_section.get("version")
+        if isinstance(version_value, str) and version_value.strip():
+            return version_value.strip()
+    return "0.0.0"
+
+
+try:
+    __version__ = pkg_version("contextctl")
+except PackageNotFoundError:
+    __version__ = _load_local_version()
+
 __all__ = [
     "REPO_CONFIG_FILENAME",
     "ConfigError",
@@ -41,6 +75,7 @@ __all__ = [
     "RuleDocument",
     "RuleMetadata",
     "StoreSyncError",
+    "__version__",
     "clear_store_cache",
     "create_default_config",
     "ensure_store_root",
