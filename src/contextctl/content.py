@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, TypeVar
 
 import yaml
 from pydantic import ValidationError
 
 from contextctl.models import PromptMetadata, RuleMetadata
+
+DocumentT = TypeVar("DocumentT", bound="BaseDocument")
+
 
 _FRONTMATTER_BOUNDARY: Final[re.Pattern[str]] = re.compile(r"^---\s*$", re.MULTILINE)
 _PROMPT_SUFFIXES: Final[tuple[str, ...]] = (".md", ".markdown")
@@ -109,6 +113,106 @@ def scan_rules_dir(store_path: Path) -> list[RuleDocument]:
     return sorted(documents, key=lambda doc: doc.metadata.rule_id)
 
 
+def filter_by_repo(  # noqa: UP047
+    documents: Iterable[DocumentT],
+    repo_slug: str | None,
+) -> list[DocumentT]:
+    """Return documents whose repo list matches the provided slug."""
+    items = list(documents)
+    if repo_slug is None:
+        return items
+
+    normalized = repo_slug.strip().casefold()
+    if not normalized:
+        return items
+
+    results: list[DocumentT] = []
+    for document in items:
+        repos = _metadata_value_set(document.metadata.repos)
+        if not repos or normalized in repos:
+            results.append(document)
+    return results
+
+
+def filter_by_tags(  # noqa: UP047
+    documents: Iterable[DocumentT],
+    tags: Iterable[str] | None,
+    *,
+    match_all: bool = False,
+) -> list[DocumentT]:
+    """Return documents filtered by tag membership."""
+    items = list(documents)
+    query_tags = _normalize_query_values(tags)
+    if not query_tags:
+        return items
+
+    results: list[DocumentT] = []
+    for document in items:
+        document_tags = _metadata_value_set(document.metadata.tags)
+        if not document_tags:
+            continue
+        if match_all and query_tags.issubset(document_tags):
+            results.append(document)
+            continue
+        if not match_all and document_tags & query_tags:
+            results.append(document)
+    return results
+
+
+def filter_by_agent(  # noqa: UP047
+    documents: Iterable[DocumentT],
+    agents: str | Sequence[str] | None,
+) -> list[DocumentT]:
+    """Return documents compatible with the provided agents."""
+    items = list(documents)
+    query_agents = _normalize_query_values(agents)
+    if not query_agents:
+        return items
+
+    results: list[DocumentT] = []
+    for document in items:
+        document_agents = _metadata_value_set(document.metadata.agents)
+        if not document_agents:
+            results.append(document)
+            continue
+        if document_agents & query_agents:
+            results.append(document)
+    return results
+
+
+def search_prompts(
+    documents: Iterable[PromptDocument],
+    query: str,
+    *,
+    fuzzy_threshold: float = 0.72,
+) -> list[PromptDocument]:
+    """Return prompts that match the provided full-text query."""
+    tokens = _tokenize_query(query)
+    if not tokens:
+        msg = "Search query cannot be empty"
+        raise ContentError(msg)
+
+    normalized_query = query.strip()
+    fuzzy_candidates = set(tokens)
+    if normalized_query:
+        fuzzy_candidates.add(normalized_query.casefold())
+
+    results: list[tuple[float, PromptDocument]] = []
+    for document in documents:
+        haystack = _build_prompt_haystack(document)
+        token_score = _token_match_score(tokens, haystack)
+        fuzzy_score = _fuzzy_match_score(fuzzy_candidates, document.metadata.prompt_id)
+
+        if token_score == 0.0 and fuzzy_score < fuzzy_threshold:
+            continue
+
+        score = max(token_score, fuzzy_score)
+        results.append((score, document))
+
+    results.sort(key=lambda item: (-item[0], item[1].metadata.prompt_id))
+    return [document for _, document in results]
+
+
 def _scan_directory[DocumentT: BaseDocument](
     *,
     store_path: Path,
@@ -136,6 +240,66 @@ def _list_files(directory: Path, allowed_suffixes: tuple[str, ...]) -> list[Path
         if candidate.is_file() and candidate.suffix.lower() in allowed
     ]
     return results
+
+
+def _normalize_query_values(values: str | Iterable[str] | None) -> set[str]:
+    """Return a casefolded set of query terms."""
+    if values is None:
+        return set()
+    if isinstance(values, str):
+        candidates = [values]
+    else:
+        candidates = list(values)
+
+    normalized: list[str] = []
+    for candidate in candidates:
+        trimmed = candidate.strip()
+        if not trimmed:
+            continue
+        normalized.append(trimmed.casefold())
+    return set(normalized)
+
+
+def _metadata_value_set(values: Iterable[str]) -> set[str]:
+    """Return a normalized set for metadata fields."""
+    return {value.strip().casefold() for value in values if value.strip()}
+
+
+def _tokenize_query(query: str) -> list[str]:
+    """Split and normalize the search query."""
+    return [token.casefold() for token in query.split() if token.strip()]
+
+
+def _build_prompt_haystack(document: PromptDocument) -> str:
+    """Concatenate metadata and body for search matching."""
+    parts = [
+        document.metadata.prompt_id,
+        " ".join(document.metadata.tags),
+        " ".join(document.metadata.repos),
+        " ".join(document.metadata.agents),
+        document.body,
+    ]
+    return " ".join(parts).casefold()
+
+
+def _token_match_score(tokens: list[str], haystack: str) -> float:
+    """Return a score based on token occurrences."""
+    if not tokens:
+        return 0.0
+    if all(token in haystack for token in tokens):
+        return 2.0 + 0.1 * len(tokens)
+    if any(token in haystack for token in tokens):
+        return 1.0
+    return 0.0
+
+
+def _fuzzy_match_score(candidates: set[str], prompt_id: str) -> float:
+    """Return the best fuzzy match ratio for the provided prompt id."""
+    identifier = prompt_id.casefold()
+    scores = [SequenceMatcher(a=candidate, b=identifier).ratio() for candidate in candidates if candidate]
+    if not scores:
+        return 0.0
+    return max(scores)
 
 
 def _load_document[MetadataModel: (PromptMetadata, RuleMetadata)](

@@ -11,11 +11,15 @@ from .content import (
     ContentError,
     PromptDocument,
     RuleDocument,
+    filter_by_agent,
+    filter_by_repo,
+    filter_by_tags,
     load_prompt,
     load_rule,
     parse_frontmatter,
     scan_prompts_dir,
     scan_rules_dir,
+    search_prompts,
 )
 from .models import PromptLibConfig, PromptMetadata, RepoConfig, RuleMetadata
 from .store import (
@@ -40,6 +44,9 @@ __all__ = [
     "clear_store_cache",
     "create_default_config",
     "ensure_store_root",
+    "filter_by_agent",
+    "filter_by_repo",
+    "filter_by_tags",
     "find_repo_root",
     "get_store_path",
     "load_prompt",
@@ -48,5 +55,6 @@ __all__ = [
     "parse_frontmatter",
     "scan_prompts_dir",
     "scan_rules_dir",
+    "search_prompts",
     "sync_central_repo",
 ]
