@@ -3,7 +3,7 @@ name = "contextctl"
 version = "0.0.1"
 description = "ContextCtl is a repo-aware prompt and rule manager. It pulls the right context for any codebase from a central store, so teams can use consistent, up-to-date prompts with any AI tool."
 readme = "README.md"
-authors = [{ name = "Darec Stowell", email = "darec.specmaker@gamil.com" }]
+authors = [{ name = "Darec Stowell", email = "darec.specmaker@gmail.com" }]
 requires-python = ">=3.13"
 dependencies = [
     "gitpython>=3.1.45",
