@@ -9,7 +9,7 @@ from typing import Any, Final, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 _ID_PATTERN: Final[re.Pattern[str]] = re.compile(r"[a-z0-9][a-z0-9\-_]*")
-_SEMVER_PATTERN: Final[re.Pattern[str]] = re.compile(r"\d+\.\d+\.\d+")
+_SEMVER_PATTERN: Final[re.Pattern[str]] = re.compile(r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)")
 
 
 def _normalize_list(values: list[str]) -> list[str]:
