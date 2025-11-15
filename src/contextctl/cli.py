@@ -291,7 +291,9 @@ def _prompt_central_repo(existing_config: RepoConfig | None) -> str:
     """Prompt the user for the central prompt repository location."""
     while True:
         if existing_config is not None:
-            value: str = typer.prompt("Central prompt repository URL or local path", default=existing_config.central_repo)
+            value: str = typer.prompt(
+                "Central prompt repository URL or local path", default=existing_config.central_repo
+            )
         else:
             value = typer.prompt("Central prompt repository URL or local path")
         normalized = value.strip()
