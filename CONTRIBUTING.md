@@ -41,7 +41,7 @@ uv run --frozen pyright
 uv run --frozen pytest -q
 
 # Tests with coverage
-uv run --frozen pytest --cov=src/contextctl--cov-report=term-missing
+uv run --frozen pytest --cov=src/contextctl --cov-report=term-missing
 ```
 
 Guidelines:
