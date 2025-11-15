@@ -108,12 +108,12 @@ CLI Command → Sync Central Repo → Load Config → Parse Metadata → Execute
 ### Phase 7: CLI Command - rules
 **Goal:** Implement rule fetching and merging
 
-52. [ ] Implement rule fetching based on repo config
-53. [ ] Concatenate multiple rule files in order specified in `.promptlib.yml`
-54. [ ] Support output formats (text, json, cursor-format) via --format flag
-55. [ ] Add --save option to write to `.cursor/rules/`
-56. [ ] Display rule metadata and sources
-57. [ ] Write integration tests for rules command with multiple scenarios
+52. [x] Implement rule fetching based on repo config
+53. [x] Concatenate multiple rule files in order specified in `.promptlib.yml`
+54. [x] Support output formats (text, json, cursor-format) via --format flag
+55. [x] Add --save option to write to `.cursor/rules/`
+56. [x] Display rule metadata and sources
+57. [x] Write integration tests for rules command with multiple scenarios
 
 ### Phase 8: CLI Commands - list & search
 **Goal:** Implement prompt browsing and search commands

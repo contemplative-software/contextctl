@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,8 +19,10 @@ from rich.theme import Theme
 from contextctl import (
     REPO_CONFIG_FILENAME,
     ConfigError,
+    ContentError,
     PromptLibConfig,
     RepoConfig,
+    RuleDocument,
     StoreSyncError,
     __version__,
     clear_store_cache,
@@ -27,6 +30,7 @@ from contextctl import (
     find_repo_root,
     get_store_path,
     load_repo_config,
+    load_rule,
     sync_central_repo,
 )
 
@@ -81,6 +85,10 @@ class StorePreview:
 
 _SKIP_PREP_COMMANDS: Final[set[str]] = {"init"}
 _SET_FILE_SUFFIXES: Final[tuple[str, ...]] = (".md", ".markdown", ".yml", ".yaml")
+_RULE_FILE_SUFFIXES: Final[tuple[str, ...]] = (".md", ".markdown")
+_RULE_OUTPUT_FORMATS: Final[tuple[str, ...]] = ("text", "json", "cursor")
+_CURSOR_RULE_FILENAME: Final[str] = "contextctl.mdc"
+_RULE_SECTION_DIVIDER: Final[str] = "\n\n---\n\n"
 
 
 @app.callback()
@@ -182,6 +190,63 @@ def init(ctx: typer.Context) -> None:
 
     _write_repo_config_file(config_path, repo_config)
     console.print(f"[success]Created {config_path.relative_to(repo_root)}[/success]")
+
+
+@app.command()
+def rules(
+    ctx: typer.Context,
+    output_format: str = typer.Option(
+        None,
+        "--format",
+        "-f",
+        help="Output format for merged rules. Supported values: text, json, cursor.",
+    ),
+    save: bool = typer.Option(
+        False,
+        "--save",
+        help="Write Cursor-formatted output to `.cursor/rules/contextctl.mdc`.",
+    ),
+) -> None:
+    """Render and optionally persist the configured rule sets."""
+    state = _ensure_state(ctx)
+    if not state.prepared:
+        _prepare_environment(state)
+        if not state.prepared:
+            return
+
+    repo_config = state.repo_config
+    if repo_config is None:
+        _abort(state, "Repository configuration is not available.")
+        return
+    if not repo_config.rules:
+        _abort(state, "No rule sets are configured in .promptlib.yml.")
+        return
+
+    store_path = _require_store_path(state, repo_config)
+    try:
+        documents = _load_selected_rules(store_path, repo_config.rules)
+    except ContentError as exc:
+        _abort(state, str(exc))
+        return
+
+    format_value = output_format or state.promptlib_config.default_output_format
+    normalized_format = format_value.strip().casefold()
+    if normalized_format not in _RULE_OUTPUT_FORMATS:
+        supported = ", ".join(_RULE_OUTPUT_FORMATS)
+        _abort(state, f"Unsupported format '{format_value}'. Supported values: {supported}.")
+        return
+
+    _render_rule_summary(state.console, documents, store_path)
+    formatted_output = _format_rules(documents, normalized_format, store_path)
+    state.console.print()
+    state.console.print(formatted_output, markup=False)
+
+    if save:
+        repo_root = find_repo_root()
+        cursor_payload = _format_rules(documents, "cursor", store_path)
+        saved_path = _write_cursor_rules_file(cursor_payload, repo_root=repo_root)
+        relative_path = saved_path.relative_to(repo_root)
+        state.console.print(f"[success]Saved Cursor rules to {relative_path}[/success]")
 
 
 def _get_state(ctx: typer.Context, *, verbose: bool, skip_sync: bool, force_sync: bool) -> CLIState:
@@ -485,3 +550,206 @@ def _write_repo_config_file(config_path: Path, config: RepoConfig) -> None:
         yaml.safe_dump(payload, sort_keys=False),
         encoding="utf-8",
     )
+
+
+def _require_store_path(state: CLIState, repo_config: RepoConfig) -> Path:
+    """Return the path to the prompt store, ensuring it exists locally."""
+    if state.store_path and state.store_path.exists():
+        return state.store_path
+
+    store_path = get_store_path(state.promptlib_config, repo_config.central_repo)
+    if not store_path.exists():
+        msg = "Prompt store is not available locally. Run without --no-sync or execute a sync-enabled command first."
+        _abort(state, msg)
+    state.store_path = store_path
+    return store_path
+
+
+def _load_selected_rules(store_path: Path, selections: Sequence[str]) -> list[RuleDocument]:
+    """Load and return rule documents that match the configured selections."""
+    rules_root = (store_path / "rules").resolve()
+    if not rules_root.exists() or not rules_root.is_dir():
+        msg = f"No rules directory found under {store_path}"
+        raise ContentError(msg)
+
+    documents: list[RuleDocument] = []
+    for selection in selections:
+        normalized = selection.strip()
+        if not normalized:
+            continue
+        matched = _load_rules_for_selection(rules_root, normalized)
+        if not matched:
+            msg = f"No rule documents matched '{selection}'."
+            raise ContentError(msg)
+        documents.extend(matched)
+
+    if not documents:
+        msg = "No rule documents were loaded for the configured rule sets."
+        raise ContentError(msg)
+    return documents
+
+
+def _load_rules_for_selection(rules_root: Path, selection: str) -> list[RuleDocument]:
+    """Return RuleDocument instances for a specific selection entry."""
+    directory = _resolve_selection_directory(rules_root, selection)
+    if directory is not None:
+        files = _collect_rule_files(directory)
+        return [load_rule(path) for path in files]
+
+    files = _resolve_selection_files(rules_root, selection)
+    return [load_rule(path) for path in files]
+
+
+def _resolve_selection_directory(rules_root: Path, selection: str) -> Path | None:
+    """Return the directory that matches the selection, if present."""
+    candidate = (rules_root / selection).resolve()
+    root = rules_root.resolve()
+    if not _is_within_root(candidate, root):
+        return None
+    if candidate.is_dir():
+        return candidate
+    return None
+
+
+def _resolve_selection_files(rules_root: Path, selection: str) -> list[Path]:
+    """Return file paths that match a selection string."""
+    root = rules_root.resolve()
+
+    candidate = (rules_root / selection).resolve()
+    if candidate.is_file() and _is_within_root(candidate, root):
+        return [candidate]
+
+    selection_path = Path(selection)
+    if not selection_path.suffix:
+        for suffix in _RULE_FILE_SUFFIXES:
+            candidate_with_suffix = (rules_root / selection_path).with_suffix(suffix).resolve()
+            if candidate_with_suffix.is_file() and _is_within_root(candidate_with_suffix, root):
+                return [candidate_with_suffix]
+
+    if len(selection_path.parts) == 1:
+        matches = [path for path in _collect_rule_files(rules_root) if path.stem == selection_path.stem]
+        if matches:
+            return matches
+
+    return []
+
+
+def _collect_rule_files(directory: Path) -> list[Path]:
+    """Return rule documents discovered beneath the provided directory."""
+    return [
+        path for path in sorted(directory.rglob("*")) if path.is_file() and path.suffix.lower() in _RULE_FILE_SUFFIXES
+    ]
+
+
+def _is_within_root(path: Path, root: Path) -> bool:
+    """Return True if the provided path is within the expected root directory."""
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return False
+    return True
+
+
+def _render_rule_summary(console: Console, documents: Sequence[RuleDocument], store_path: Path) -> None:
+    """Render a table summarizing the merged rule metadata."""
+    table = Table(title="Rule Sources", header_style="bold", show_lines=False, box=box.MINIMAL_DOUBLE_HEAD)
+    table.add_column("Rule ID", style="info")
+    table.add_column("Version", justify="right")
+    table.add_column("Tags")
+    table.add_column("Repos")
+    table.add_column("Source", style="text")
+
+    for document in documents:
+        metadata = document.metadata
+        tags = ", ".join(metadata.tags) or "-"
+        repos = ", ".join(metadata.repos) or "all"
+        source = _relative_source(document.path, store_path)
+        table.add_row(
+            metadata.rule_id,
+            metadata.version,
+            tags,
+            repos,
+            source,
+        )
+
+    console.print(table)
+
+
+def _format_rules(documents: Sequence[RuleDocument], format_name: str, store_path: Path) -> str:
+    """Return the merged rule content formatted according to the requested output."""
+    if format_name == "text":
+        return _format_rules_as_text(documents)
+    if format_name == "json":
+        return _format_rules_as_json(documents, store_path)
+    if format_name == "cursor":
+        return _format_rules_as_cursor(documents)
+    msg = f"Unsupported format: {format_name}"
+    raise ValueError(msg)
+
+
+def _format_rules_as_text(documents: Sequence[RuleDocument]) -> str:
+    """Return merged rule content as plain text with lightweight headings."""
+    sections: list[str] = []
+    for document in documents:
+        header = f"# {document.metadata.rule_id}"
+        body = document.body.strip()
+        sections.append(f"{header}\n\n{body}")
+    return _RULE_SECTION_DIVIDER.join(sections).strip()
+
+
+def _format_rules_as_json(documents: Sequence[RuleDocument], store_path: Path) -> str:
+    """Return merged rule content as a JSON array."""
+    payload: list[dict[str, object]] = []
+    for document in documents:
+        metadata = document.metadata
+        payload.append(
+            {
+                "id": metadata.rule_id,
+                "tags": metadata.tags,
+                "repos": metadata.repos,
+                "agents": metadata.agents,
+                "version": metadata.version,
+                "body": document.body,
+                "source": _relative_source(document.path, store_path),
+            }
+        )
+    return json.dumps(payload, indent=2, ensure_ascii=False)
+
+
+def _format_rules_as_cursor(documents: Sequence[RuleDocument]) -> str:
+    """Return merged rule content optimized for `.cursor/rules` consumption."""
+    sections: list[str] = []
+    for document in documents:
+        metadata = document.metadata
+        lines = [
+            f"# {metadata.rule_id}",
+            "",
+            f"*Version:* {metadata.version}",
+        ]
+        if metadata.tags:
+            lines.append(f"*Tags:* {', '.join(metadata.tags)}")
+        if metadata.repos:
+            lines.append(f"*Repos:* {', '.join(metadata.repos)}")
+        if metadata.agents:
+            lines.append(f"*Agents:* {', '.join(metadata.agents)}")
+        lines.append("")
+        lines.append(document.body.strip())
+        sections.append("\n".join(lines).strip())
+    return f"{_RULE_SECTION_DIVIDER}".join(sections).strip() + "\n"
+
+
+def _relative_source(path: Path, store_path: Path) -> str:
+    """Return the document path relative to the store root, if possible."""
+    try:
+        return path.relative_to(store_path).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def _write_cursor_rules_file(content: str, *, repo_root: Path) -> Path:
+    """Persist Cursor-formatted rules within `.cursor/rules/`."""
+    rules_dir = repo_root / ".cursor" / "rules"
+    rules_dir.mkdir(parents=True, exist_ok=True)
+    target = rules_dir / _CURSOR_RULE_FILENAME
+    target.write_text(content, encoding="utf-8")
+    return target

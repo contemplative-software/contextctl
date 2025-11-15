@@ -63,6 +63,55 @@ def _create_prompt_store(root: Path) -> Path:
     return store_root
 
 
+def _create_rule_store_with_documents(root: Path) -> Path:
+    """Create a prompt store populated with rule documents containing metadata."""
+    store_root = root / "rule-store"
+    python_dir = store_root / "rules" / "python"
+    security_dir = store_root / "rules" / "security"
+    python_dir.mkdir(parents=True)
+    security_dir.mkdir(parents=True)
+
+    (python_dir / "python-style.md").write_text(
+        dedent(
+            """
+            ---
+            id: python-style
+            tags:
+              - python
+            repos:
+              - contextctl
+            agents:
+              - cursor
+            version: 1.0.0
+            ---
+            Follow the standard Python style guidelines.
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    (security_dir / "security.md").write_text(
+        dedent(
+            """
+            ---
+            id: security
+            tags:
+              - security
+            repos:
+              - ops
+            agents:
+              - claude
+            version: 2.3.1
+            ---
+            Enforce security reviews for every change.
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    return store_root
+
+
 def test_version_command_triggers_sync(mocker: MockerFixture) -> None:
     """Running `contextctl version` should load config and sync the store."""
     runner = CliRunner()
@@ -181,3 +230,61 @@ def test_init_respects_existing_configuration() -> None:
         assert result.exit_code == 0
         assert Path(".promptlib.yml").read_text(encoding="utf-8") == original_contents
         assert "preserved" in result.stdout
+
+
+def test_rules_command_merges_rule_sets_in_config_order(mocker: MockerFixture) -> None:
+    """`contextctl rules` should load the configured sets and respect their order."""
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        Path(".git").mkdir()
+        store_path = _create_rule_store_with_documents(Path())
+        Path(".promptlib.yml").write_text(
+            dedent(
+                """
+                central_repo: https://example.com/library.git
+                rules:
+                  - security
+                  - python
+                """
+            ).strip(),
+            encoding="utf-8",
+        )
+        mocker.patch("contextctl.cli.sync_central_repo", return_value=store_path)
+
+        result = runner.invoke(app, ["rules"], catch_exceptions=False)
+
+        assert result.exit_code == 0
+        assert "Rule Sources" in result.stdout
+        security_index = result.stdout.index("# security")
+        python_index = result.stdout.index("# python-style")
+        assert security_index < python_index
+        assert "Enforce security reviews for every change." in result.stdout
+
+
+def test_rules_command_supports_json_format_and_save(mocker: MockerFixture) -> None:
+    """The rules command should emit JSON and persist Cursor files."""
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        Path(".git").mkdir()
+        store_path = _create_rule_store_with_documents(Path())
+        Path(".promptlib.yml").write_text(
+            dedent(
+                """
+                central_repo: https://example.com/library.git
+                rules:
+                  - python-style
+                """
+            ).strip(),
+            encoding="utf-8",
+        )
+        mocker.patch("contextctl.cli.sync_central_repo", return_value=store_path)
+
+        result = runner.invoke(app, ["rules", "--format", "json", "--save"], catch_exceptions=False)
+
+        assert result.exit_code == 0
+        assert '"id": "python-style"' in result.stdout
+        saved_path = Path(".cursor") / "rules" / "contextctl.mdc"
+        assert saved_path.exists()
+        saved_contents = saved_path.read_text(encoding="utf-8")
+        assert "# python-style" in saved_contents
+        assert "Saved Cursor rules to .cursor/rules/contextctl.mdc" in result.stdout
