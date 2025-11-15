@@ -1,0 +1,11 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_commit: v1.1.0
+_src_path: gh:mjun0812/python-copier-template
+author_email: darec.specmaker@gamil.com
+author_name: Darec Stowell
+description: ContextCtl is a repo-aware prompt and rule manager. It pulls the right
+    context for any codebase from a central store, so teams can use consistent, up-to-date
+    prompts with any AI tool.
+package_name: contextctl
+project_name: contextctl
+python_version: '3.13'
