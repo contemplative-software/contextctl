@@ -112,6 +112,76 @@ def _create_rule_store_with_documents(root: Path) -> Path:
     return store_root
 
 
+def _create_prompt_store_with_prompts(root: Path, repo_slug: str) -> Path:
+    """Create a prompt store populated with prompts tailored for list/search tests."""
+    store_root = root / "prompt-library"
+    reviews_dir = store_root / "prompts" / "reviews"
+    incidents_dir = store_root / "prompts" / "incidents"
+    reviews_dir.mkdir(parents=True)
+    incidents_dir.mkdir(parents=True)
+
+    (reviews_dir / "review-pr.md").write_text(
+        dedent(
+            f"""
+            ---
+            id: review-pr
+            title: Review Pull Requests
+            tags:
+              - reviews
+              - python
+            repos:
+              - {repo_slug}
+            agents:
+              - cursor
+            version: 0.3.0
+            ---
+            Provide a detailed pull request review with actionable feedback.
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    (reviews_dir / "global-guidance.md").write_text(
+        dedent(
+            """
+            ---
+            id: global-guidance
+            title: General Guidance
+            tags:
+              - general
+            repos: []
+            agents: []
+            version: 0.1.0
+            ---
+            Use this template for AI requests that apply to every repository.
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    (incidents_dir / "incident-response.md").write_text(
+        dedent(
+            """
+            ---
+            id: incident-response
+            title: Incident Response
+            tags:
+              - incidents
+            repos:
+              - ops
+            agents:
+              - claude
+            version: 0.2.0
+            ---
+            Use this script to coordinate an incident prompt and capture follow-ups.
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    return store_root
+
+
 def test_version_command_triggers_sync(mocker: MockerFixture) -> None:
     """Running `contextctl version` should load config and sync the store."""
     runner = CliRunner()
@@ -288,3 +358,84 @@ def test_rules_command_supports_json_format_and_save(mocker: MockerFixture) -> N
         saved_contents = saved_path.read_text(encoding="utf-8")
         assert "# python-style" in saved_contents
         assert "Saved Cursor rules to .cursor/rules/contextctl.mdc" in result.stdout
+
+
+def test_list_command_filters_prompts_and_supports_pagination(mocker: MockerFixture) -> None:
+    """The list command should honor repo filters, tag filters, and pagination."""
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        Path(".git").mkdir()
+        repo_slug = Path.cwd().name
+        store_path = _create_prompt_store_with_prompts(Path(), repo_slug)
+        Path(".promptlib.yml").write_text(
+            dedent(
+                """
+                central_repo: https://example.com/library.git
+                prompt_sets:
+                  - reviews
+                  - incidents
+                """
+            ).strip(),
+            encoding="utf-8",
+        )
+        mocker.patch("contextctl.cli.sync_central_repo", return_value=store_path)
+
+        result = runner.invoke(app, ["list"], catch_exceptions=False)
+
+        assert result.exit_code == 0
+        assert "review-pr" in result.stdout
+        assert "global-guidance" in result.stdout
+        assert "incident-response" not in result.stdout
+
+        tag_result = runner.invoke(app, ["list", "--all", "--tag", "incidents"], catch_exceptions=False)
+
+        assert tag_result.exit_code == 0
+        assert "incident-response" in tag_result.stdout
+        assert "review-pr" not in tag_result.stdout
+
+        page_result = runner.invoke(
+            app,
+            ["list", "--all", "--per-page", "2", "--page", "2"],
+            catch_exceptions=False,
+        )
+
+        assert page_result.exit_code == 0
+        assert "incident-response" in page_result.stdout
+        assert "review-pr" not in page_result.stdout
+
+
+def test_search_command_supports_exact_matches_and_snippets(mocker: MockerFixture) -> None:
+    """The search command should provide snippets and respect the --exact flag."""
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        Path(".git").mkdir()
+        repo_slug = Path.cwd().name
+        store_path = _create_prompt_store_with_prompts(Path(), repo_slug)
+        Path(".promptlib.yml").write_text(
+            dedent(
+                """
+                central_repo: https://example.com/library.git
+                prompt_sets:
+                  - reviews
+                  - incidents
+                """
+            ).strip(),
+            encoding="utf-8",
+        )
+        mocker.patch("contextctl.cli.sync_central_repo", return_value=store_path)
+
+        fuzzy_result = runner.invoke(app, ["search", "pull", "request"], catch_exceptions=False)
+
+        assert fuzzy_result.exit_code == 0
+        assert "review-pr" in fuzzy_result.stdout
+        assert "pull request review" in fuzzy_result.stdout
+
+        exact_result = runner.invoke(
+            app,
+            ["search", "--exact", "--all", "incident prompt"],
+            catch_exceptions=False,
+        )
+
+        assert exact_result.exit_code == 0
+        assert "incident-response" in exact_result.stdout
+        assert "review-pr" not in exact_result.stdout

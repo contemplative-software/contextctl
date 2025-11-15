@@ -6,7 +6,7 @@ import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import Final, TypeVar
 
 import typer
 import yaml
@@ -20,6 +20,7 @@ from contextctl import (
     REPO_CONFIG_FILENAME,
     ConfigError,
     ContentError,
+    PromptDocument,
     PromptLibConfig,
     RepoConfig,
     RuleDocument,
@@ -27,12 +28,17 @@ from contextctl import (
     __version__,
     clear_store_cache,
     create_default_config,
+    filter_by_repo,
+    filter_by_tags,
     find_repo_root,
     get_store_path,
+    load_prompt,
     load_repo_config,
     load_rule,
+    search_prompts,
     sync_central_repo,
 )
+from contextctl.content import BaseDocument
 
 CLI_THEME: Final[Theme] = Theme(
     {
@@ -89,6 +95,12 @@ _RULE_FILE_SUFFIXES: Final[tuple[str, ...]] = (".md", ".markdown")
 _RULE_OUTPUT_FORMATS: Final[tuple[str, ...]] = ("text", "json", "cursor")
 _CURSOR_RULE_FILENAME: Final[str] = "contextctl.mdc"
 _RULE_SECTION_DIVIDER: Final[str] = "\n\n---\n\n"
+_PROMPT_FILE_SUFFIXES: Final[tuple[str, ...]] = (".md", ".markdown")
+_DEFAULT_PAGE_SIZE: Final[int] = 20
+_MAX_PAGE_SIZE: Final[int] = 200
+_SNIPPET_CONTEXT_CHARS: Final[int] = 120
+
+DocumentT = TypeVar("DocumentT")
 
 
 @app.callback()
@@ -247,6 +259,172 @@ def rules(
         saved_path = _write_cursor_rules_file(cursor_payload, repo_root=repo_root)
         relative_path = saved_path.relative_to(repo_root)
         state.console.print(f"[success]Saved Cursor rules to {relative_path}[/success]")
+
+
+@app.command("list")
+def list_prompts(
+    ctx: typer.Context,
+    tag: list[str] | None = typer.Option(
+        None,
+        "--tag",
+        "-t",
+        help="Filter prompts by tag. Provide multiple --tag options for additional filters.",
+    ),
+    all_prompts: bool = typer.Option(
+        False,
+        "--all",
+        help="Display prompts from every repository instead of restricting to the current repo.",
+    ),
+    page: int = typer.Option(
+        1,
+        "--page",
+        min=1,
+        help="Page number to display (1-indexed).",
+    ),
+    per_page: int = typer.Option(
+        _DEFAULT_PAGE_SIZE,
+        "--per-page",
+        min=1,
+        max=_MAX_PAGE_SIZE,
+        help="Number of prompts to show per page.",
+    ),
+    match_all_tags: bool = typer.Option(
+        False,
+        "--match-all-tags",
+        help="Require prompts to include every provided tag instead of matching any tag.",
+    ),
+) -> None:
+    """Render a paginated table of prompts relevant to the current repository."""
+    state = _ensure_state(ctx)
+    if not state.prepared:
+        _prepare_environment(state)
+        if not state.prepared:
+            return
+
+    repo_config = state.repo_config
+    if repo_config is None:
+        _abort(state, "Repository configuration is not available.")
+        return
+
+    store_path = _require_store_path(state, repo_config)
+    try:
+        documents = _load_prompt_documents(store_path, repo_config.prompt_sets)
+    except ContentError as exc:
+        _abort(state, str(exc))
+        return
+
+    repo_slug = _resolve_repo_slug()
+    filtered = documents if all_prompts else filter_by_repo(documents, repo_slug)
+    tag_filters = list(tag or [])
+    filtered = filter_by_tags(filtered, tag_filters, match_all=match_all_tags)
+
+    if not filtered:
+        scope = "all prompts" if all_prompts else f"repo '{repo_slug or 'unknown'}'"
+        if tag_filters:
+            scope = f"{scope} with tags {', '.join(tag_filters)}"
+        state.console.print(f"[warning]No prompts matched {scope}. Try relaxing the filters or use --all.[/warning]")
+        return
+
+    paginated, total_pages, resolved_page = _paginate_items(filtered, page, per_page)
+    if page > total_pages:
+        state.console.print(
+            f"[warning]Requested page {page} exceeds total pages ({total_pages}). "
+            f"Showing page {resolved_page} instead.[/warning]"
+        )
+
+    _render_prompt_table(
+        state.console,
+        paginated,
+        resolved_page,
+        total_pages,
+        total=len(filtered),
+        repo_slug=repo_slug,
+        filtered_tags=tag_filters,
+        include_repo_filter=not all_prompts,
+    )
+
+
+@app.command()
+def search(
+    ctx: typer.Context,
+    terms: list[str] = typer.Argument(
+        ...,
+        help="Search terms. Provide multiple values to widen the query.",
+    ),
+    tag: list[str] | None = typer.Option(
+        None,
+        "--tag",
+        "-t",
+        help="Filter prompts by tag before applying the search.",
+    ),
+    all_prompts: bool = typer.Option(
+        False,
+        "--all",
+        help="Search across every repository instead of restricting to the current repo.",
+    ),
+    exact: bool = typer.Option(
+        False,
+        "--exact",
+        help="Require exact phrase matches instead of fuzzy token matching.",
+    ),
+    limit: int = typer.Option(
+        20,
+        "--limit",
+        min=1,
+        max=200,
+        help="Maximum number of results to display.",
+    ),
+) -> None:
+    """Search prompt content and display contextual snippets."""
+    state = _ensure_state(ctx)
+    if not state.prepared:
+        _prepare_environment(state)
+        if not state.prepared:
+            return
+
+    repo_config = state.repo_config
+    if repo_config is None:
+        _abort(state, "Repository configuration is not available.")
+        return
+
+    query = " ".join(part for part in terms if part.strip()).strip()
+    if not query:
+        _abort(state, "Search terms cannot be empty.")
+        return
+
+    store_path = _require_store_path(state, repo_config)
+    try:
+        documents = _load_prompt_documents(store_path, repo_config.prompt_sets)
+    except ContentError as exc:
+        _abort(state, str(exc))
+        return
+
+    repo_slug = _resolve_repo_slug()
+    filtered = documents if all_prompts else filter_by_repo(documents, repo_slug)
+    tag_filters = list(tag or [])
+    filtered = filter_by_tags(filtered, tag_filters)
+
+    results = _execute_search(filtered, query, exact=exact)
+    if not results:
+        scope = "all prompts" if all_prompts else f"repo '{repo_slug or 'unknown'}'"
+        state.console.print(
+            f"[warning]No prompts matched query '{query}' within {scope}. "
+            f"Try --all or adjust the search terms.[/warning]"
+        )
+        return
+
+    limited_results = results[:limit]
+    _render_search_results(
+        state.console,
+        limited_results,
+        query=query,
+        total=len(results),
+        limit=limit,
+        repo_slug=repo_slug,
+        include_repo_filter=not all_prompts,
+        filtered_tags=tag_filters,
+        exact=exact,
+    )
 
 
 def _get_state(ctx: typer.Context, *, verbose: bool, skip_sync: bool, force_sync: bool) -> CLIState:
@@ -753,3 +931,265 @@ def _write_cursor_rules_file(content: str, *, repo_root: Path) -> Path:
     target = rules_dir / _CURSOR_RULE_FILENAME
     target.write_text(content, encoding="utf-8")
     return target
+
+
+def _render_prompt_table(
+    console: Console,
+    prompts: Sequence[PromptDocument],
+    page: int,
+    total_pages: int,
+    *,
+    total: int,
+    repo_slug: str | None,
+    filtered_tags: Sequence[str],
+    include_repo_filter: bool,
+) -> None:
+    """Render a Rich table summarizing prompts for the list command."""
+    table = Table(title="Prompts", header_style="bold", show_lines=False, box=box.MINIMAL_DOUBLE_HEAD)
+    table.add_column("Prompt ID", style="info")
+    table.add_column("Title", style="text")
+    table.add_column("Tags")
+    table.add_column("Agents")
+
+    for document in prompts:
+        metadata = document.metadata
+        tags = ", ".join(metadata.tags) or "-"
+        agents = ", ".join(metadata.agents) or "all"
+        title = _prompt_display_title(document)
+        table.add_row(metadata.prompt_id, title, tags, agents)
+
+    console.print(table)
+    repo_scope = "all repositories"
+    if include_repo_filter:
+        repo_scope = f"repo '{repo_slug or 'unknown'}'"
+    tag_scope = f"; tags: {', '.join(filtered_tags)}" if filtered_tags else ""
+    console.print(
+        f"[info]Showing page {page} of {total_pages} ({len(prompts)} of {total} prompts, "
+        f"{repo_scope}{tag_scope}).[/info]"
+    )
+
+
+def _render_search_results(
+    console: Console,
+    prompts: Sequence[PromptDocument],
+    *,
+    query: str,
+    total: int,
+    limit: int,
+    repo_slug: str | None,
+    include_repo_filter: bool,
+    filtered_tags: Sequence[str],
+    exact: bool,
+) -> None:
+    """Display search results with contextual snippets."""
+    table = Table(
+        title=f"Search results for '{query}'",
+        header_style="bold",
+        show_lines=False,
+        box=box.MINIMAL_DOUBLE_HEAD,
+    )
+    table.add_column("Prompt ID", style="info")
+    table.add_column("Title", style="text")
+    table.add_column("Snippet", style="text")
+    table.add_column("Tags")
+
+    for document in prompts:
+        metadata = document.metadata
+        snippet = _build_search_snippet(document, query)
+        table.add_row(
+            metadata.prompt_id,
+            _prompt_display_title(document),
+            snippet,
+            ", ".join(metadata.tags) or "-",
+        )
+
+    console.print(table)
+    repo_scope = "all repositories"
+    if include_repo_filter:
+        repo_scope = f"repo '{repo_slug or 'unknown'}'"
+    tag_scope = f"; tags: {', '.join(filtered_tags)}" if filtered_tags else ""
+    search_mode = "Exact" if exact else "Fuzzy"
+
+    if total > len(prompts):
+        console.print(
+            f"[info]Showing {len(prompts)} of {total} matches (limit={limit}) "
+            f"within {repo_scope}{tag_scope}. {search_mode} search applied.[/info]"
+        )
+    else:
+        console.print(
+            f"[info]Found {total} matches within {repo_scope}{tag_scope}. {search_mode} search applied.[/info]"
+        )
+
+
+def _prompt_display_title(document: PromptDocument) -> str:
+    """Return a user-friendly prompt title."""
+    metadata = document.metadata
+    if metadata.title:
+        return metadata.title
+    candidate = metadata.prompt_id.replace("-", " ").replace("_", " ").strip()
+    return candidate.title() or metadata.prompt_id
+
+
+def _resolve_repo_slug() -> str | None:
+    """Return the repository slug derived from the git root directory name."""
+    try:
+        return find_repo_root().name
+    except ConfigError:
+        return None
+
+
+def _load_prompt_documents(store_path: Path, selections: Sequence[str]) -> list[PromptDocument]:
+    """Load prompt documents honoring the configured prompt set selections."""
+    prompts_root = (store_path / "prompts").resolve()
+    if not prompts_root.exists() or not prompts_root.is_dir():
+        msg = f"No prompts directory found under {store_path}"
+        raise ContentError(msg)
+
+    if not selections:
+        files = _collect_prompt_files(prompts_root)
+        return [load_prompt(path) for path in files]
+
+    seen: set[Path] = set()
+    ordered_paths: list[Path] = []
+
+    for selection in selections:
+        normalized = selection.strip()
+        if not normalized:
+            continue
+        matched_paths = _load_prompts_for_selection(prompts_root, normalized)
+        if not matched_paths:
+            msg = f"No prompt documents matched '{selection}'."
+            raise ContentError(msg)
+        for path in matched_paths:
+            resolved = path.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            ordered_paths.append(resolved)
+
+    if not ordered_paths:
+        msg = "No prompt documents were loaded for the configured prompt sets."
+        raise ContentError(msg)
+
+    return [load_prompt(path) for path in ordered_paths]
+
+
+def _load_prompts_for_selection(prompts_root: Path, selection: str) -> list[Path]:
+    """Return prompt file paths for a specific selection entry."""
+    directory = _resolve_selection_directory(prompts_root, selection)
+    if directory is not None:
+        return _collect_prompt_files(directory)
+    return _resolve_prompt_selection_files(prompts_root, selection)
+
+
+def _resolve_prompt_selection_files(prompts_root: Path, selection: str) -> list[Path]:
+    """Return prompt file paths that match a selection string."""
+    root = prompts_root.resolve()
+
+    candidate = (prompts_root / selection).resolve()
+    if candidate.is_file() and _is_within_root(candidate, root):
+        return [candidate]
+
+    selection_path = Path(selection)
+    if not selection_path.suffix:
+        for suffix in _PROMPT_FILE_SUFFIXES:
+            candidate_with_suffix = (prompts_root / selection_path).with_suffix(suffix).resolve()
+            if candidate_with_suffix.is_file() and _is_within_root(candidate_with_suffix, root):
+                return [candidate_with_suffix]
+
+    if len(selection_path.parts) == 1:
+        matches = [path for path in _collect_prompt_files(prompts_root) if path.stem == selection_path.stem]
+        if matches:
+            return matches
+
+    return []
+
+
+def _collect_prompt_files(directory: Path) -> list[Path]:
+    """Return prompt documents discovered beneath the provided directory."""
+    return [
+        path
+        for path in sorted(directory.rglob("*"))
+        if path.is_file() and path.suffix.lower() in _PROMPT_FILE_SUFFIXES
+    ]
+
+
+def _paginate_items[DocumentT: BaseDocument](
+    items: Sequence[DocumentT], page: int, per_page: int
+) -> tuple[list[DocumentT], int, int]:
+    """Return paginated items, total pages, and the resolved page number."""
+    if not items:
+        return [], 1, 1
+    total = len(items)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    resolved_page = min(page, total_pages)
+    start = (resolved_page - 1) * per_page
+    end = start + per_page
+    return list(items[start:end]), total_pages, resolved_page
+
+
+def _execute_search(documents: Sequence[PromptDocument], query: str, *, exact: bool) -> list[PromptDocument]:
+    """Execute a fuzzy or exact search across prompt documents."""
+    if exact:
+        normalized_query = query.casefold()
+        results: list[PromptDocument] = []
+        for document in documents:
+            if normalized_query in _prompt_search_haystack(document):
+                results.append(document)
+        return results
+    return search_prompts(documents, query)
+
+
+def _prompt_search_haystack(document: PromptDocument) -> str:
+    """Return the lowercased haystack string for prompt searching."""
+    metadata = document.metadata
+    parts = [
+        metadata.prompt_id,
+        metadata.title or "",
+        " ".join(metadata.tags),
+        " ".join(metadata.repos),
+        " ".join(metadata.agents),
+        document.body,
+    ]
+    return " ".join(parts).casefold()
+
+
+def _build_search_snippet(document: PromptDocument, query: str) -> str:
+    """Return a contextual snippet for a search result."""
+    body = document.body.strip()
+    if not body:
+        return "(no body content)"
+
+    lowered = body.casefold()
+    tokens = [token.casefold() for token in query.split() if token.strip()]
+    match_index = -1
+    match_length = 0
+
+    if tokens:
+        for token in sorted(tokens, key=len, reverse=True):
+            idx = lowered.find(token)
+            if idx != -1:
+                match_index = idx
+                match_length = len(token)
+                break
+
+    if match_index == -1:
+        match_index = 0
+
+    start = max(0, match_index - _SNIPPET_CONTEXT_CHARS // 2)
+    end = min(len(body), start + _SNIPPET_CONTEXT_CHARS)
+    snippet = body[start:end]
+
+    if match_length:
+        relative_index = match_index - start
+        highlighted = (
+            snippet[:relative_index]
+            + f"[success]{body[match_index : match_index + match_length]}[/success]"
+            + snippet[relative_index + match_length :]
+        )
+    else:
+        highlighted = snippet
+
+    prefix = "..." if start > 0 else ""
+    suffix = "..." if end < len(body) else ""
+    return f"{prefix}{highlighted}{suffix}"

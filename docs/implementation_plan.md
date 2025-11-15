@@ -118,18 +118,18 @@ CLI Command → Sync Central Repo → Load Config → Parse Metadata → Execute
 ### Phase 8: CLI Commands - list & search
 **Goal:** Implement prompt browsing and search commands
 
-58. [ ] Implement prompt listing with rich table output
-59. [ ] Show ID, title, tags, agent compatibility in list
-60. [ ] Filter list by repo associations from config
-61. [ ] Add --all flag to show all prompts regardless of repo
-62. [ ] Add --tags filter option to list command
-63. [ ] Add pagination for large lists
-64. [ ] Implement text search across prompt content
-65. [ ] Search in titles, descriptions, and tags
-66. [ ] Display search results with context snippets
-67. [ ] Add --exact flag for exact matching
-68. [ ] Support multiple search terms
-69. [ ] Write integration tests for list and search commands
+58. [x] Implement prompt listing with rich table output
+59. [x] Show ID, title, tags, agent compatibility in list
+60. [x] Filter list by repo associations from config
+61. [x] Add --all flag to show all prompts regardless of repo
+62. [x] Add --tags filter option to list command
+63. [x] Add pagination for large lists
+64. [x] Implement text search across prompt content
+65. [x] Search in titles, descriptions, and tags
+66. [x] Display search results with context snippets
+67. [x] Add --exact flag for exact matching
+68. [x] Support multiple search terms
+69. [x] Write integration tests for list and search commands
 
 ### Phase 9: CLI Commands - run & tree
 **Goal:** Implement prompt execution and tree view

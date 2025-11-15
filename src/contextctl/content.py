@@ -274,6 +274,7 @@ def _build_prompt_haystack(document: PromptDocument) -> str:
     """Concatenate metadata and body for search matching."""
     parts = [
         document.metadata.prompt_id,
+        document.metadata.title or "",
         " ".join(document.metadata.tags),
         " ".join(document.metadata.repos),
         " ".join(document.metadata.agents),

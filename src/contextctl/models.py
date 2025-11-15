@@ -65,6 +65,7 @@ class PromptMetadata(_BaseMetadata):
     """Metadata parsed from a prompt markdown file."""
 
     prompt_id: str = Field(alias="id")
+    title: str | None = None
 
     @field_validator("prompt_id")
     @classmethod
@@ -77,6 +78,17 @@ class PromptMetadata(_BaseMetadata):
         if not _ID_PATTERN.fullmatch(normalized):
             msg = "Prompt id must contain lowercase letters, numbers, dashes, or underscores"
             raise ValueError(msg)
+        return normalized
+
+    @field_validator("title")
+    @classmethod
+    def normalize_title(cls, value: str | None) -> str | None:
+        """Trim optional prompt titles, returning None when blank."""
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            return None
         return normalized
 
 
