@@ -9,6 +9,7 @@ from typing import Final
 
 import typer
 import yaml
+from pydantic import ValidationError
 from rich import box
 from rich.console import Console
 from rich.table import Table
@@ -137,6 +138,9 @@ def init(ctx: typer.Context) -> None:
     if state.skip_sync:
         console.print("[warning]Skipping store preview because --no-sync was provided.[/warning]")
     else:
+        if state.force_sync:
+            store_path = get_store_path(state.promptlib_config, central_repo)
+            clear_store_cache(store_path)
         preview = _load_store_preview(
             central_repo,
             promptlib_config=state.promptlib_config,
@@ -268,13 +272,18 @@ def _ensure_state(ctx: typer.Context) -> CLIState:
 
 
 def _load_existing_config(repo_root: Path, console: Console) -> RepoConfig | None:
-    """Attempt to load an existing `.promptlib.yml` for default values."""
+    """Attempt to load an existing `.promptlib.yml` for default values.
+
+    Loads the YAML file directly without applying environment overrides to avoid
+    baking transient environment values into the persisted configuration.
+    """
     config_path = repo_root / REPO_CONFIG_FILENAME
     if not config_path.exists():
         return None
     try:
-        return load_repo_config(repo_root)
-    except ConfigError as exc:
+        raw_config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+        return RepoConfig.model_validate(raw_config)
+    except (yaml.YAMLError, ValidationError) as exc:
         console.print(f"[warning]Existing configuration is invalid: {exc}[/warning]")
         return None
 
