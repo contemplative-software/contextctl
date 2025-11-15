@@ -28,16 +28,43 @@ def _normalize_list(values: list[str]) -> list[str]:
     return normalized
 
 
-class PromptMetadata(BaseModel):
-    """Metadata parsed from a prompt markdown file."""
+class _BaseMetadata(BaseModel):
+    """Shared metadata fields and validation for prompts and rules."""
 
     model_config = ConfigDict(populate_by_name=True, frozen=True)
 
-    prompt_id: str = Field(alias="id")
     tags: list[str] = Field(default_factory=list)
     repos: list[str] = Field(default_factory=list)
     agents: list[str] = Field(default_factory=list)
     version: str = Field(default="0.1.0")
+
+    @field_validator("tags", "repos", "agents", mode="before")
+    @classmethod
+    def normalize_lists(cls, values: Any) -> list[str]:
+        """Trim and de-duplicate list inputs."""
+        if not isinstance(values, list):
+            msg = "Expected a list of strings"
+            raise TypeError(msg)
+        return _normalize_list(values)
+
+    @field_validator("version")
+    @classmethod
+    def validate_version(cls, value: str) -> str:
+        """Validate semantic version strings."""
+        normalized = value.strip()
+        if not normalized:
+            msg = "Version cannot be blank"
+            raise ValueError(msg)
+        if not _SEMVER_PATTERN.fullmatch(normalized):
+            msg = "Version must follow MAJOR.MINOR.PATCH format"
+            raise ValueError(msg)
+        return normalized
+
+
+class PromptMetadata(_BaseMetadata):
+    """Metadata parsed from a prompt markdown file."""
+
+    prompt_id: str = Field(alias="id")
 
     @field_validator("prompt_id")
     @classmethod
@@ -52,39 +79,11 @@ class PromptMetadata(BaseModel):
             raise ValueError(msg)
         return normalized
 
-    @field_validator("tags", "repos", "agents", mode="before")
-    @classmethod
-    def normalize_lists(cls, values: Any) -> list[str]:
-        """Trim and de-duplicate list inputs."""
-        if not isinstance(values, list):
-            msg = "Expected a list of strings"
-            raise TypeError(msg)
-        return _normalize_list(values)
 
-    @field_validator("version")
-    @classmethod
-    def validate_version(cls, value: str) -> str:
-        """Validate semantic version strings."""
-        normalized = value.strip()
-        if not normalized:
-            msg = "Version cannot be blank"
-            raise ValueError(msg)
-        if not _SEMVER_PATTERN.fullmatch(normalized):
-            msg = "Version must follow MAJOR.MINOR.PATCH format"
-            raise ValueError(msg)
-        return normalized
-
-
-class RuleMetadata(BaseModel):
+class RuleMetadata(_BaseMetadata):
     """Metadata parsed from a rule definition file."""
 
-    model_config = ConfigDict(populate_by_name=True, frozen=True)
-
     rule_id: str = Field(alias="id")
-    tags: list[str] = Field(default_factory=list)
-    repos: list[str] = Field(default_factory=list)
-    agents: list[str] = Field(default_factory=list)
-    version: str = Field(default="0.1.0")
 
     @field_validator("rule_id")
     @classmethod
@@ -96,28 +95,6 @@ class RuleMetadata(BaseModel):
             raise ValueError(msg)
         if not _ID_PATTERN.fullmatch(normalized):
             msg = "Rule id must contain lowercase letters, numbers, dashes, or underscores"
-            raise ValueError(msg)
-        return normalized
-
-    @field_validator("tags", "repos", "agents", mode="before")
-    @classmethod
-    def normalize_lists(cls, values: Any) -> list[str]:
-        """Trim and de-duplicate list inputs."""
-        if not isinstance(values, list):
-            msg = "Expected a list of strings"
-            raise TypeError(msg)
-        return _normalize_list(values)
-
-    @field_validator("version")
-    @classmethod
-    def validate_version(cls, value: str) -> str:
-        """Validate semantic version strings."""
-        normalized = value.strip()
-        if not normalized:
-            msg = "Version cannot be blank"
-            raise ValueError(msg)
-        if not _SEMVER_PATTERN.fullmatch(normalized):
-            msg = "Version must follow MAJOR.MINOR.PATCH format"
             raise ValueError(msg)
         return normalized
 
