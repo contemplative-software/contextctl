@@ -1110,8 +1110,7 @@ def _collect_prompt_files(directory: Path) -> list[Path]:
     return [
         path
         for path in sorted(directory.rglob("*"))
-        if path.is_file()
-        and path.suffix.lower() in _PROMPT_FILE_SUFFIXES
+        if path.is_file() and path.suffix.lower() in _PROMPT_FILE_SUFFIXES
     ]
 
 
