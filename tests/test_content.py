@@ -178,7 +178,7 @@ def test_filter_by_repo_includes_repo_agnostic_prompts(
     prompts = scan_prompts_dir(sample_prompt_store)
     prompt = PromptDocument(
         metadata=PromptMetadata(
-            prompt_id="global",
+            id="global",
             tags=["general"],
             repos=[],
             agents=[],
@@ -201,7 +201,7 @@ def test_filter_by_tags_supports_any_and_all_modes(
     prompts = scan_prompts_dir(sample_prompt_store)
     prompt = PromptDocument(
         metadata=PromptMetadata(
-            prompt_id="multi",
+            id="multi",
             tags=["reviews", "python"],
             repos=["contextctl"],
             agents=["cursor"],
@@ -236,7 +236,7 @@ def test_filter_by_agent_includes_agent_agnostic_prompts(
     prompts = scan_prompts_dir(sample_prompt_store)
     neutral = PromptDocument(
         metadata=PromptMetadata(
-            prompt_id="neutral",
+            id="neutral",
             tags=["general"],
             repos=[],
             agents=[],

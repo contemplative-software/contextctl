@@ -20,6 +20,7 @@ def test_prompt_metadata_dedupes_lists(prompt_metadata_payload: PromptMetadataPa
     """Lists should be trimmed and deduplicated."""
     metadata = PromptMetadata(**prompt_metadata_payload)
 
+    assert metadata.title == "Review PR"
     assert metadata.tags == ["reviews", "python"]
     assert metadata.repos == ["contextctl"]
     assert metadata.agents == ["cursor", "claude"]

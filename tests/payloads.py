@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal, TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 
 class PromptMetadataPayload(TypedDict):
     """Schema for prompt metadata fixture."""
 
     id: str
+    title: NotRequired[str]
     tags: list[str]
     repos: list[str]
     agents: list[str]

@@ -20,6 +20,7 @@ def prompt_metadata_payload() -> PromptMetadataPayload:
     """Provide canonical prompt metadata for tests."""
     return {
         "id": "review-pr",
+        "title": "Review PR",
         "tags": ["reviews", "python", "reviews"],
         "repos": ["contextctl", " contextctl "],
         "agents": ["cursor", "claude"],
