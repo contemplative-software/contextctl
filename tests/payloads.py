@@ -42,4 +42,3 @@ class PromptLibConfigPayload(TypedDict):
     sync_timeout_seconds: int
     default_output_format: Literal["text", "json", "cursor"]
     env_prefix: str
-

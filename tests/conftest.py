@@ -13,6 +13,7 @@ from .payloads import (
     RuleMetadataPayload,
 )
 
+
 @pytest.fixture
 def prompt_metadata_payload() -> PromptMetadataPayload:
     """Provide canonical prompt metadata for tests."""
