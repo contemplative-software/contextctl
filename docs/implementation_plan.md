@@ -47,19 +47,19 @@ CLI Command → Sync Central Repo → Load Config → Parse Metadata → Execute
 ### Phase 2: Configuration & Storage Layer
 **Goal:** Implement configuration management and Git-based central store syncing
 
-11. [ ] Implement `find_repo_root()` to locate git repo boundary
-12. [ ] Implement `load_repo_config()` function to read/parse `.promptlib.yml`
-13. [ ] Implement `create_default_config()` for initial setup
-14. [ ] Add config validation with helpful error messages
-15. [ ] Add support for environment variable overrides (CONTEXTCTL_*)
-16. [ ] Implement `get_store_path()` to determine local cache location (~/.contextctl/store)
-17. [ ] Implement `sync_central_repo()` using GitPython to clone/pull central repo (support both Git URLs and local paths)
-18. [ ] Add error handling for network failures, timeouts (5s max), and git conflicts
-19. [ ] Implement fallback to stale cache with warning when sync fails
-20. [ ] Implement cleanup/cache management utilities
-21. [ ] Add progress indicators using rich for sync operations
-22. [ ] Write unit tests for config loading, parsing, and store management
-23. [ ] Mock Git operations for testing
+11. [x] Implement `find_repo_root()` to locate git repo boundary
+12. [x] Implement `load_repo_config()` function to read/parse `.promptlib.yml`
+13. [x] Implement `create_default_config()` for initial setup
+14. [x] Add config validation with helpful error messages
+15. [x] Add support for environment variable overrides (CONTEXTCTL_*)
+16. [x] Implement `get_store_path()` to determine local cache location (~/.contextctl/store)
+17. [x] Implement `sync_central_repo()` using GitPython to clone/pull central repo (support both Git URLs and local paths)
+18. [x] Add error handling for network failures, timeouts (5s max), and git conflicts
+19. [x] Implement fallback to stale cache with warning when sync fails
+20. [x] Implement cleanup/cache management utilities
+21. [x] Add progress indicators using rich for sync operations
+22. [x] Write unit tests for config loading, parsing, and store management
+23. [x] Mock Git operations for testing
 
 ### Phase 3: Content Parsing & Indexing
 **Goal:** Parse YAML frontmatter and build prompt/rule index
