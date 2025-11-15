@@ -1,14 +1,8 @@
-"""Temporary CLI entrypoint used during early development."""
-
-from __future__ import annotations
-
-from contextctl import PromptLibConfig
+from contextctl import hello
 
 
 def main() -> None:
-    """Print the configured store root for smoke testing."""
-    config = PromptLibConfig()
-    print(f"contextctl store: {config.store_root}")
+    print(hello())
 
 
 if __name__ == "__main__":
