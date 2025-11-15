@@ -2,19 +2,35 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from textwrap import dedent
 
-import pytest
-
 from contextctl import (
     ContentError,
+    PromptDocument,
+    PromptMetadata,
+    filter_by_agent,
+    filter_by_repo,
+    filter_by_tags,
     load_prompt,
     load_rule,
     parse_frontmatter,
     scan_prompts_dir,
     scan_rules_dir,
+    search_prompts,
 )
+
+
+@contextmanager
+def expect_raises(exc_type: type[BaseException]) -> Iterator[None]:
+    """Context manager that asserts an exception is raised."""
+    try:
+        yield
+    except exc_type:
+        return
+    raise AssertionError(f"Expected {exc_type.__name__} to be raised")
 
 
 def test_parse_frontmatter_returns_metadata_and_body() -> None:
@@ -39,7 +55,7 @@ def test_parse_frontmatter_returns_metadata_and_body() -> None:
 
 def test_parse_frontmatter_requires_delimiters() -> None:
     """Missing YAML delimiters should raise a ContentError."""
-    with pytest.raises(ContentError):
+    with expect_raises(ContentError):
         parse_frontmatter("id: missing-delimiters")
 
 
@@ -87,7 +103,7 @@ def test_load_prompt_requires_required_metadata(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    with pytest.raises(ContentError):
+    with expect_raises(ContentError):
         load_prompt(prompt_path)
 
 
@@ -141,5 +157,139 @@ def test_scan_rules_dir_requires_directory(tmp_path: Path) -> None:
     store_root = tmp_path / "empty-store"
     store_root.mkdir()
 
-    with pytest.raises(ContentError):
+    with expect_raises(ContentError):
         scan_rules_dir(store_root)
+
+
+def test_filter_by_repo_matches_specific_repo(sample_prompt_store: Path) -> None:
+    """filter_by_repo should include prompts tied to the requested repo."""
+    prompts = scan_prompts_dir(sample_prompt_store)
+
+    filtered = filter_by_repo(prompts, "ContextCTL")
+
+    assert [doc.metadata.prompt_id for doc in filtered] == ["review-pr"]
+
+
+def test_filter_by_repo_includes_repo_agnostic_prompts(
+    sample_prompt_store: Path,
+    tmp_path: Path,
+) -> None:
+    """Prompts without repo restrictions should match any repo."""
+    prompts = scan_prompts_dir(sample_prompt_store)
+    prompt = PromptDocument(
+        metadata=PromptMetadata(
+            prompt_id="global",
+            tags=["general"],
+            repos=[],
+            agents=[],
+            version="0.1.0",
+        ),
+        body="General guidance",
+        path=tmp_path / "global.md",
+    )
+
+    filtered = filter_by_repo([*prompts, prompt], "ops")
+
+    assert {doc.metadata.prompt_id for doc in filtered} == {"incident-response", "global"}
+
+
+def test_filter_by_tags_supports_any_and_all_modes(
+    sample_prompt_store: Path,
+    tmp_path: Path,
+) -> None:
+    """filter_by_tags should handle any vs. all tag matching."""
+    prompts = scan_prompts_dir(sample_prompt_store)
+    prompt = PromptDocument(
+        metadata=PromptMetadata(
+            prompt_id="multi",
+            tags=["reviews", "python"],
+            repos=["contextctl"],
+            agents=["cursor"],
+            version="0.3.0",
+        ),
+        body="Multi-tag prompt",
+        path=tmp_path / "multi.md",
+    )
+    extended = [*prompts, prompt]
+
+    any_match = filter_by_tags(extended, ["reviews"])
+    all_match = filter_by_tags(extended, ["reviews", "python"], match_all=True)
+
+    assert {doc.metadata.prompt_id for doc in any_match} >= {"review-pr", "multi"}
+    assert [doc.metadata.prompt_id for doc in all_match] == ["multi"]
+
+
+def test_filter_by_agent_matches_requested_agents(sample_prompt_store: Path) -> None:
+    """filter_by_agent should return prompts compatible with specified agents."""
+    prompts = scan_prompts_dir(sample_prompt_store)
+
+    filtered = filter_by_agent(prompts, "cursor")
+
+    assert [doc.metadata.prompt_id for doc in filtered] == ["review-pr"]
+
+
+def test_filter_by_agent_includes_agent_agnostic_prompts(
+    sample_prompt_store: Path,
+    tmp_path: Path,
+) -> None:
+    """Prompts without agent restrictions should match every agent filter."""
+    prompts = scan_prompts_dir(sample_prompt_store)
+    neutral = PromptDocument(
+        metadata=PromptMetadata(
+            prompt_id="neutral",
+            tags=["general"],
+            repos=[],
+            agents=[],
+            version="0.1.0",
+        ),
+        body="Neutral prompt",
+        path=tmp_path / "neutral.md",
+    )
+
+    filtered = filter_by_agent([*prompts, neutral], "cursor")
+
+    assert {doc.metadata.prompt_id for doc in filtered} == {"review-pr", "neutral"}
+
+
+def test_search_prompts_matches_body_tokens(sample_prompt_store: Path) -> None:
+    """search_prompts should locate prompts by body text tokens."""
+    prompts = scan_prompts_dir(sample_prompt_store)
+
+    results = search_prompts(prompts, "pull request")
+
+    assert [doc.metadata.prompt_id for doc in results] == ["review-pr"]
+
+
+def test_search_prompts_supports_fuzzy_prompt_ids(sample_prompt_store: Path) -> None:
+    """search_prompts should return prompts when ids nearly match."""
+    prompts = scan_prompts_dir(sample_prompt_store)
+
+    results = search_prompts(prompts, "reviewpr")
+
+    assert [doc.metadata.prompt_id for doc in results] == ["review-pr"]
+
+
+def test_search_prompts_handles_special_characters(sample_prompt_store: Path) -> None:
+    """Queries containing special characters should be treated literally."""
+    prompts = scan_prompts_dir(sample_prompt_store)
+
+    results = search_prompts(prompts, "incident-response")
+
+    assert [doc.metadata.prompt_id for doc in results] == ["incident-response"]
+
+
+def test_search_prompts_returns_empty_for_unknown_terms(sample_prompt_store: Path) -> None:
+    """Unknown queries should yield an empty result set."""
+    prompts = scan_prompts_dir(sample_prompt_store)
+
+    results = search_prompts(prompts, "nonexistent term")
+
+    assert results == []
+
+
+def test_search_prompts_rejects_blank_queries(sample_prompt_store: Path) -> None:
+    """Blank queries should raise a ContentError."""
+    prompts = scan_prompts_dir(sample_prompt_store)
+
+    with expect_raises(ContentError):
+        search_prompts(prompts, "   ")

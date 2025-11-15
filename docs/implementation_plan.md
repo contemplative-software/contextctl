@@ -76,13 +76,13 @@ CLI Command → Sync Central Repo → Load Config → Parse Metadata → Execute
 ### Phase 4: Filtering & Search Engine
 **Goal:** Implement filtering and search capabilities
 
-32. [ ] Implement `filter_by_repo()` to match prompts/rules to current repo
-33. [ ] Implement `filter_by_tags()` for tag-based filtering
-34. [ ] Implement `filter_by_agent()` for agent compatibility filtering
-35. [ ] Implement `search_prompts()` for text search across content
-36. [ ] Add fuzzy matching for prompt IDs
-37. [ ] Write unit tests for filtering and search logic
-38. [ ] Test edge cases (empty results, malformed queries, special characters)
+32. [x] Implement `filter_by_repo()` to match prompts/rules to current repo
+33. [x] Implement `filter_by_tags()` for tag-based filtering
+34. [x] Implement `filter_by_agent()` for agent compatibility filtering
+35. [x] Implement `search_prompts()` for text search across content
+36. [x] Add fuzzy matching for prompt IDs
+37. [x] Write unit tests for filtering and search logic
+38. [x] Test edge cases (empty results, malformed queries, special characters)
 
 ### Phase 5: CLI Framework & Base Commands
 **Goal:** Set up Typer CLI framework with core infrastructure
