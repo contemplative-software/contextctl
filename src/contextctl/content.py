@@ -6,7 +6,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Final, TypeVar
+from typing import Any, Final
 
 import yaml
 from pydantic import ValidationError
@@ -16,9 +16,6 @@ from contextctl.models import PromptMetadata, RuleMetadata
 _FRONTMATTER_BOUNDARY: Final[re.Pattern[str]] = re.compile(r"^---\s*$", re.MULTILINE)
 _PROMPT_SUFFIXES: Final[tuple[str, ...]] = (".md", ".markdown")
 _RULE_SUFFIXES: Final[tuple[str, ...]] = (".md", ".markdown")
-
-MetadataModel = TypeVar("MetadataModel", PromptMetadata, RuleMetadata)
-DocumentT = TypeVar("DocumentT", bound="BaseDocument")
 
 
 class ContentError(RuntimeError):
@@ -92,22 +89,24 @@ def load_rule(path: Path) -> RuleDocument:
 
 def scan_prompts_dir(store_path: Path) -> list[PromptDocument]:
     """Return all prompts discovered under the `prompts/` directory."""
-    return _scan_directory(
+    documents = _scan_directory(
         store_path=store_path,
         relative_dir="prompts",
         loader=load_prompt,
         allowed_suffixes=_PROMPT_SUFFIXES,
     )
+    return sorted(documents, key=lambda doc: doc.metadata.prompt_id)
 
 
 def scan_rules_dir(store_path: Path) -> list[RuleDocument]:
     """Return all rules discovered under the `rules/` directory."""
-    return _scan_directory(
+    documents = _scan_directory(
         store_path=store_path,
         relative_dir="rules",
         loader=load_rule,
         allowed_suffixes=_RULE_SUFFIXES,
     )
+    return sorted(documents, key=lambda doc: doc.metadata.rule_id)
 
 
 def _scan_directory[DocumentT: BaseDocument](

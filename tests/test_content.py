@@ -7,7 +7,7 @@ from textwrap import dedent
 
 import pytest
 
-from contextctl.content import (
+from contextctl import (
     ContentError,
     load_prompt,
     load_rule,
