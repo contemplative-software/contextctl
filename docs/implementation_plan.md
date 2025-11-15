@@ -97,13 +97,13 @@ CLI Command → Sync Central Repo → Load Config → Parse Metadata → Execute
 ### Phase 6: CLI Command - init
 **Goal:** Implement repository initialization workflow
 
-45. [ ] Implement interactive wizard for initial setup
-46. [ ] Prompt for central repository URL or local path with validation
-47. [ ] Allow selection of rule sets (with preview)
-48. [ ] Allow selection of prompt sets (with preview)
-49. [ ] Generate `.promptlib.yml` in repo root with `central_repo` field
-50. [ ] Add validation and confirmation before writing config
-51. [ ] Write integration tests for init command (happy path and errors)
+45. [x] Implement interactive wizard for initial setup
+46. [x] Prompt for central repository URL or local path with validation
+47. [x] Allow selection of rule sets (with preview)
+48. [x] Allow selection of prompt sets (with preview)
+49. [x] Generate `.promptlib.yml` in repo root with `central_repo` field
+50. [x] Add validation and confirmation before writing config
+51. [x] Write integration tests for init command (happy path and errors)
 
 ### Phase 7: CLI Command - rules
 **Goal:** Implement rule fetching and merging
