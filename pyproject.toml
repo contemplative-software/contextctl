@@ -5,7 +5,13 @@ description = "ContextCtl is a repo-aware prompt and rule manager. It pulls the 
 readme = "README.md"
 authors = [{ name = "Darec Stowell", email = "darec.specmaker@gamil.com" }]
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "gitpython>=3.1.45",
+    "pydantic>=2.12.4",
+    "pyyaml>=6.0.3",
+    "rich>=14.2.0",
+    "typer>=0.20.0",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -15,12 +21,20 @@ build-backend = "hatchling.build"
 packages = ["src/contextctl"]
 
 [dependency-groups]
-dev = ["pre-commit>=4.2.0", "pytest>=8.4.0", "ruff>=0.11.12"]
+dev = [
+    "mypy>=1.18.2",
+    "pre-commit>=4.2.0",
+    "pytest>=9.0.1",
+    "pytest-cov>=7.0.0",
+    "pytest-mock>=3.15.1",
+    "ruff>=0.14.5",
+]
 
 [tool.ruff]
-line-length = 100
+line-length = 119
 target-version = "py313"
 exclude = [".git", ".ruff_cache", ".venv", ".vscode"]
+src = ["src"]
 
 [tool.ruff.lint]
 preview = true
@@ -75,3 +89,21 @@ unfixable = [
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unreachable = true
+plugins = []
+mypy_path = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers --disable-warnings"
+testpaths = ["tests"]
+pythonpath = ["src"]
+filterwarnings = [
+    "error::DeprecationWarning",
+]
