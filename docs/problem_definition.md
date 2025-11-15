@@ -5,7 +5,7 @@ Teams maintain AI prompts and rules inside each repository, leading to:
 - duplicated prompts across many codebases
 - outdated or inconsistent versions
 - difficulty updating rules in sync
-- friction when switching between tools (Cursor, Claude, JetBrains, etc.)
+- friction when switching between tools (Cursor, Claude Code, Codex, etc.)
 - messy onboarding for new developers
 
 Because prompts evolve quickly, embedding them inside individual repos causes **prompt drift**, **redundancy**, and **maintenance overhead**.
@@ -33,7 +33,7 @@ The CLI:
 - identifies the repo
 - loads all relevant prompts + rules
 - outputs them in a tool-agnostic format
-- allows developers to browse/run/search prompts
+- allows developers & agents to browse/run/search prompts
 - synchronizes with the central store
 
 ## How It Solves the Problem
@@ -50,7 +50,7 @@ Prompts output in:
 - raw text
 - JSON
 - block format  
-usable by Claude, Cursor, JetBrains, etc.
+usable by Claude Code, Cursor, Codex, etc.
 
 ### **4. Fast Updates**
 A single change updates prompts for the entire organization.
