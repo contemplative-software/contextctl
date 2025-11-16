@@ -134,18 +134,18 @@ CLI Command → Sync Central Repo → Load Config → Parse Metadata → Execute
 ### Phase 9: CLI Commands - run & tree
 **Goal:** Implement prompt execution and tree view
 
-70. [ ] Implement prompt retrieval by ID in run command
-71. [ ] Strip frontmatter and output clean prompt content
-72. [ ] Support variable substitution using {{variable}} syntax
-73. [ ] Parse --var key=value flags (support multiple)
-74. [ ] Add --format option (text, json) to run command
-75. [ ] Add --copy flag to copy to clipboard
-76. [ ] Add --output flag to write to file
-77. [ ] Implement tree view of prompt library structure
-78. [ ] Show hierarchical organization of prompts/rules
-79. [ ] Highlight repo-relevant items in tree view
-80. [ ] Add collapsible/expandable sections to tree
-81. [ ] Write integration tests for run and tree commands
+70. [x] Implement prompt retrieval by ID in run command
+71. [x] Strip frontmatter and output clean prompt content
+72. [x] Support variable substitution using {{variable}} syntax
+73. [x] Parse --var key=value flags (support multiple)
+74. [x] Add --format option (text, json) to run command
+75. [x] Add --copy flag to copy to clipboard
+76. [x] Add --output flag to write to file
+77. [x] Implement tree view of prompt library structure
+78. [x] Show hierarchical organization of prompts/rules
+79. [x] Highlight repo-relevant items in tree view
+80. [x] Add collapsible/expandable sections to tree
+81. [x] Write integration tests for run and tree commands
 
 ### Phase 10: Documentation & Polish
 **Goal:** Complete documentation and prepare for release

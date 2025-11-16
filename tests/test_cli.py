@@ -182,6 +182,121 @@ def _create_prompt_store_with_prompts(root: Path, repo_slug: str) -> Path:
     return store_root
 
 
+def _create_prompt_store_with_template(root: Path, repo_slug: str) -> Path:
+    """Create a prompt store containing a template prompt for run command tests."""
+    store_root = root / "prompt-run-store"
+    template_dir = store_root / "prompts" / "templates"
+    template_dir.mkdir(parents=True)
+
+    (template_dir / "templated.md").write_text(
+        dedent(
+            f"""
+            ---
+            id: templated
+            title: Templated Prompt
+            tags:
+              - automation
+            repos:
+              - {repo_slug}
+            agents:
+              - cursor
+            version: 1.2.3
+            ---
+            Hello {{{{name}}}}!
+            Repo: {{{{repo}}}}
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    return store_root
+
+
+def _create_combined_store(root: Path, repo_slug: str) -> Path:
+    """Create a prompt store containing both prompts and rules for tree tests."""
+    store_root = root / "full-store"
+    reviews_dir = store_root / "prompts" / "reviews"
+    general_dir = store_root / "prompts" / "general"
+    python_rules_dir = store_root / "rules" / "python"
+    ops_rules_dir = store_root / "rules" / "ops"
+
+    reviews_dir.mkdir(parents=True)
+    general_dir.mkdir(parents=True)
+    python_rules_dir.mkdir(parents=True)
+    ops_rules_dir.mkdir(parents=True)
+
+    (reviews_dir / "review-pr.md").write_text(
+        dedent(
+            f"""
+            ---
+            id: review-pr
+            title: Review PR
+            tags:
+              - reviews
+            repos:
+              - {repo_slug}
+            version: 1.0.0
+            ---
+            Review instructions.
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    (general_dir / "global-guidance.md").write_text(
+        dedent(
+            """
+            ---
+            id: global-guidance
+            title: Global Guidance
+            tags:
+              - global
+            repos: []
+            version: 1.0.0
+            ---
+            Applies everywhere.
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    (python_rules_dir / "python-style.md").write_text(
+        dedent(
+            f"""
+            ---
+            id: python-style
+            tags:
+              - python
+            repos:
+              - {repo_slug}
+            version: 1.0.0
+            ---
+            Python style guide.
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    (ops_rules_dir / "ops-checklist.md").write_text(
+        dedent(
+            """
+            ---
+            id: ops-checklist
+            tags:
+              - ops
+            repos:
+              - ops
+            version: 1.0.0
+            ---
+            Ops checklist.
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    return store_root
+
+
 def test_version_command_triggers_sync(mocker: MockerFixture) -> None:
     """Running `contextctl version` should load config and sync the store."""
     runner = CliRunner()
@@ -439,3 +554,111 @@ def test_search_command_supports_exact_matches_and_snippets(mocker: MockerFixtur
         assert exact_result.exit_code == 0
         assert "incident-response" in exact_result.stdout
         assert "review-pr" not in exact_result.stdout
+
+
+def test_run_command_renders_prompt_with_variables_and_copy(mocker: MockerFixture) -> None:
+    """The run command should interpolate variables, copy output, and write files."""
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        Path(".git").mkdir()
+        repo_slug = Path.cwd().name
+        store_path = _create_prompt_store_with_template(Path(), repo_slug)
+        Path(".promptlib.yml").write_text(
+            dedent(
+                """
+                central_repo: https://example.com/library.git
+                prompt_sets:
+                  - templates
+                """
+            ).strip(),
+            encoding="utf-8",
+        )
+        mocker.patch("contextctl.cli.sync_central_repo", return_value=store_path)
+        copy_mock = mocker.patch("contextctl.cli._copy_to_clipboard")
+
+        result = runner.invoke(
+            app,
+            [
+                "run",
+                "templated",
+                "--var",
+                "name=Developers",
+                "--var",
+                "repo=contextctl",
+                "--copy",
+                "--output",
+                "prompt.txt",
+            ],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0
+        assert "Hello Developers!" in result.stdout
+        assert "Repo: contextctl" in result.stdout
+        copy_mock.assert_called_once_with("Hello Developers!\nRepo: contextctl\n")
+
+        saved_path = Path("prompt.txt")
+        assert saved_path.exists()
+        assert "Repo: contextctl" in saved_path.read_text(encoding="utf-8")
+
+
+def test_run_command_supports_json_format_and_all_flag(mocker: MockerFixture) -> None:
+    """The run command should emit JSON and allow accessing other repo prompts with --all."""
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        Path(".git").mkdir()
+        store_path = _create_prompt_store_with_template(Path(), "other-repo")
+        Path(".promptlib.yml").write_text(
+            dedent(
+                """
+                central_repo: https://example.com/library.git
+                prompt_sets:
+                  - templates
+                """
+            ).strip(),
+            encoding="utf-8",
+        )
+        mocker.patch("contextctl.cli.sync_central_repo", return_value=store_path)
+
+        missing_result = runner.invoke(app, ["run", "templated"], catch_exceptions=False)
+        assert missing_result.exit_code == 1
+        assert "was not found" in missing_result.stdout
+
+        json_result = runner.invoke(
+            app,
+            ["run", "templated", "--all", "--format", "json"],
+            catch_exceptions=False,
+        )
+        assert json_result.exit_code == 0
+        assert '"id": "templated"' in json_result.stdout
+        assert '"version": "1.2.3"' in json_result.stdout
+
+
+def test_tree_command_displays_hierarchy_and_repo_filtering(mocker: MockerFixture) -> None:
+    """The tree command should render prompts/rules and support repo-only filtering."""
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        Path(".git").mkdir()
+        repo_slug = Path.cwd().name
+        store_path = _create_combined_store(Path(), repo_slug)
+        Path(".promptlib.yml").write_text(
+            dedent(
+                """
+                central_repo: https://example.com/library.git
+                """
+            ).strip(),
+            encoding="utf-8",
+        )
+        mocker.patch("contextctl.cli.sync_central_repo", return_value=store_path)
+
+        result = runner.invoke(app, ["tree"], catch_exceptions=False)
+        assert result.exit_code == 0
+        assert "review-pr" in result.stdout
+        assert "global-guidance" in result.stdout
+        assert "python-style" in result.stdout
+        assert "ops-checklist" in result.stdout
+
+        filtered = runner.invoke(app, ["tree", "--repo-only", "--collapse-rules"], catch_exceptions=False)
+        assert filtered.exit_code == 0
+        assert "ops-checklist" not in filtered.stdout
+        assert "review-pr" in filtered.stdout
