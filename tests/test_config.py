@@ -36,6 +36,16 @@ def test_find_repo_root_returns_git_root(tmp_path: Path) -> None:
     assert find_repo_root(nested) == repo_root
 
 
+def test_find_repo_root_handles_file_paths(tmp_path: Path) -> None:
+    """Providing a file path should resolve to its parent git root."""
+    repo_root = _make_repo(tmp_path)
+    file_path = repo_root / "nested" / "file.txt"
+    file_path.parent.mkdir(parents=True)
+    file_path.write_text("data")
+
+    assert find_repo_root(file_path) == repo_root
+
+
 def test_find_repo_root_errors_when_git_missing(tmp_path: Path) -> None:
     """Missing .git directories should raise a ConfigError."""
     with pytest.raises(ConfigError):
@@ -98,10 +108,43 @@ prompt_sets: []
     assert result.version_lock == "1.2.3"
 
 
+def test_load_repo_config_accepts_empty_file_when_env_provides_values(tmp_path: Path) -> None:
+    """Blank configuration files should allow env vars to supply settings."""
+    repo_root = _make_repo(tmp_path)
+    _write_config(repo_root, "")
+
+    env = {
+        "CONTEXTCTL_CENTRAL_REPO": "file:///tmp/promptlib",
+        "CONTEXTCTL_RULES": "alpha",
+    }
+
+    result = load_repo_config(repo_root, env=env)
+
+    assert result.central_repo == "file:///tmp/promptlib"
+    assert result.rules == ["alpha"]
+    assert result.prompt_sets == []
+
+
 def test_load_repo_config_rejects_invalid_yaml(tmp_path: Path) -> None:
     """Non-mapping YAML files should raise errors."""
     repo_root = _make_repo(tmp_path)
     _write_config(repo_root, "- not-a-mapping")
+
+    with pytest.raises(ConfigError):
+        load_repo_config(repo_root)
+
+
+def test_load_repo_config_surfaces_yaml_parse_errors(tmp_path: Path) -> None:
+    """Low-level YAML parser errors should propagate as ConfigError."""
+    repo_root = _make_repo(tmp_path)
+    _write_config(
+        repo_root,
+        """
+        ---
+        : bad
+          indentation
+        """.strip(),
+    )
 
     with pytest.raises(ConfigError):
         load_repo_config(repo_root)

@@ -28,7 +28,13 @@ class ContentError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class BaseDocument:
-    """Common fields shared across prompt and rule documents."""
+    """Common fields shared across prompt and rule documents.
+
+    Attributes:
+        metadata: Parsed metadata describing the document.
+        body: Markdown body without YAML frontmatter.
+        path: Filesystem path that produced the document.
+    """
 
     metadata: PromptMetadata | RuleMetadata
     body: str
@@ -37,20 +43,38 @@ class BaseDocument:
 
 @dataclass(frozen=True, slots=True)
 class PromptDocument(BaseDocument):
-    """Parsed prompt content."""
+    """Parsed prompt content.
+
+    Attributes:
+        metadata: PromptMetadata describing the prompt.
+    """
 
     metadata: PromptMetadata
 
 
 @dataclass(frozen=True, slots=True)
 class RuleDocument(BaseDocument):
-    """Parsed rule content."""
+    """Parsed rule content.
+
+    Attributes:
+        metadata: RuleMetadata describing the rule.
+    """
 
     metadata: RuleMetadata
 
 
 def parse_frontmatter(raw_text: str) -> tuple[dict[str, Any], str]:
-    """Extract YAML metadata and body content from a markdown document."""
+    """Extract YAML metadata and body content from a markdown document.
+
+    Args:
+        raw_text: Full markdown contents including YAML frontmatter.
+
+    Returns:
+        Tuple containing the metadata mapping and stripped body content.
+
+    Raises:
+        ContentError: If the document lacks valid frontmatter or cannot be parsed.
+    """
     text = raw_text.lstrip("\ufeff")
     opening = _FRONTMATTER_BOUNDARY.match(text)
     if opening is None:
@@ -80,19 +104,49 @@ def parse_frontmatter(raw_text: str) -> tuple[dict[str, Any], str]:
 
 
 def load_prompt(path: Path) -> PromptDocument:
-    """Load a prompt file and return its metadata and body."""
+    """Load a prompt file and return its metadata and body.
+
+    Args:
+        path: Filesystem path to the prompt document.
+
+    Returns:
+        PromptDocument instance containing metadata and body text.
+
+    Raises:
+        ContentError: If the file is missing or contains invalid metadata.
+    """
     metadata, body = _load_document(path, PromptMetadata)
     return PromptDocument(metadata=metadata, body=body, path=path)
 
 
 def load_rule(path: Path) -> RuleDocument:
-    """Load a rule file and return its metadata and body."""
+    """Load a rule file and return its metadata and body.
+
+    Args:
+        path: Filesystem path to the rule document.
+
+    Returns:
+        RuleDocument instance containing metadata and body text.
+
+    Raises:
+        ContentError: If the file is missing or contains invalid metadata.
+    """
     metadata, body = _load_document(path, RuleMetadata)
     return RuleDocument(metadata=metadata, body=body, path=path)
 
 
 def scan_prompts_dir(store_path: Path) -> list[PromptDocument]:
-    """Return all prompts discovered under the `prompts/` directory."""
+    """Return all prompts discovered under the `prompts/` directory.
+
+    Args:
+        store_path: Root of the synchronized prompt store.
+
+    Returns:
+        Alphabetically sorted list of prompt documents.
+
+    Raises:
+        ContentError: If the prompts directory is missing or malformed.
+    """
     documents = _scan_directory(
         store_path=store_path,
         relative_dir="prompts",
@@ -103,7 +157,17 @@ def scan_prompts_dir(store_path: Path) -> list[PromptDocument]:
 
 
 def scan_rules_dir(store_path: Path) -> list[RuleDocument]:
-    """Return all rules discovered under the `rules/` directory."""
+    """Return all rules discovered under the `rules/` directory.
+
+    Args:
+        store_path: Root of the synchronized prompt store.
+
+    Returns:
+        Alphabetically sorted list of rule documents.
+
+    Raises:
+        ContentError: If the rules directory is missing or malformed.
+    """
     documents = _scan_directory(
         store_path=store_path,
         relative_dir="rules",
@@ -117,7 +181,15 @@ def filter_by_repo(  # noqa: UP047
     documents: Iterable[DocumentT],
     repo_slug: str | None,
 ) -> list[DocumentT]:
-    """Return documents whose repo list matches the provided slug."""
+    """Return documents whose repo list matches the provided slug.
+
+    Args:
+        documents: Documents to evaluate.
+        repo_slug: Repository identifier derived from the git root.
+
+    Returns:
+        Documents whose metadata includes the provided slug or no repo list.
+    """
     items = list(documents)
     if repo_slug is None:
         return items
@@ -140,7 +212,16 @@ def filter_by_tags(  # noqa: UP047
     *,
     match_all: bool = False,
 ) -> list[DocumentT]:
-    """Return documents filtered by tag membership."""
+    """Return documents filtered by tag membership.
+
+    Args:
+        documents: Documents to evaluate.
+        tags: Tags used to filter results.
+        match_all: Whether documents must include every provided tag.
+
+    Returns:
+        Documents that satisfy the requested tag criteria.
+    """
     items = list(documents)
     query_tags = _normalize_query_values(tags)
     if not query_tags:
@@ -163,7 +244,15 @@ def filter_by_agent(  # noqa: UP047
     documents: Iterable[DocumentT],
     agents: str | Sequence[str] | None,
 ) -> list[DocumentT]:
-    """Return documents compatible with the provided agents."""
+    """Return documents compatible with the provided agents.
+
+    Args:
+        documents: Documents to evaluate.
+        agents: Single agent or collection of agents to match.
+
+    Returns:
+        Documents that either match or do not restrict the provided agents.
+    """
     items = list(documents)
     query_agents = _normalize_query_values(agents)
     if not query_agents:
@@ -186,7 +275,19 @@ def search_prompts(
     *,
     fuzzy_threshold: float = 0.72,
 ) -> list[PromptDocument]:
-    """Return prompts that match the provided full-text query."""
+    """Return prompts that match the provided full-text query.
+
+    Args:
+        documents: Prompt documents to search.
+        query: User-provided search text.
+        fuzzy_threshold: Minimum fuzzy-match ratio for identifier matching.
+
+    Returns:
+        Sorted list of prompt documents that match the query.
+
+    Raises:
+        ContentError: If the query is empty.
+    """
     tokens = _tokenize_query(query)
     if not tokens:
         msg = "Search query cannot be empty"

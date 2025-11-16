@@ -19,19 +19,38 @@ class StoreSyncError(RuntimeError):
 
 
 def ensure_store_root(store_root: Path) -> Path:
-    """Create the store root if it does not already exist."""
+    """Create the store root if it does not already exist.
+
+    Args:
+        store_root: Directory that should host cached prompt stores.
+
+    Returns:
+        Path pointing to the ensured store root directory.
+    """
     store_root.mkdir(parents=True, exist_ok=True)
     return store_root
 
 
 def clear_store_cache(store_path: Path) -> None:
-    """Remove the cached repository at the provided path."""
+    """Remove the cached repository at the provided path.
+
+    Args:
+        store_path: Path to the cached repository clone.
+    """
     if store_path.exists():
         shutil.rmtree(store_path)
 
 
 def get_store_path(config: PromptLibConfig, central_repo: str) -> Path:
-    """Return the path that should host the cached prompt store."""
+    """Return the path that should host the cached prompt store.
+
+    Args:
+        config: Global prompt library configuration.
+        central_repo: Remote URL or local path to the central repository.
+
+    Returns:
+        Path to either a cache directory or the provided local reference.
+    """
     cleaned = central_repo.strip()
     if _is_local_reference(cleaned):
         return _resolve_local_path(cleaned)
@@ -47,7 +66,19 @@ def sync_central_repo(
     promptlib_config: PromptLibConfig | None = None,
     console: Console | None = None,
 ) -> Path:
-    """Clone or update the cached prompt store and return its path."""
+    """Clone or update the cached prompt store and return its path.
+
+    Args:
+        central_repo: Remote URL or local path to sync.
+        promptlib_config: Global prompt library configuration overrides.
+        console: Optional Rich console used for progress reporting.
+
+    Returns:
+        Path pointing to the up-to-date prompt store.
+
+    Raises:
+        StoreSyncError: If synchronization fails and no cache is available.
+    """
     config = promptlib_config or PromptLibConfig()
     cleaned = central_repo.strip()
     store_path = get_store_path(config, cleaned)

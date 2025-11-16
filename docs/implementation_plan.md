@@ -150,17 +150,17 @@ CLI Command → Sync Central Repo → Load Config → Parse Metadata → Execute
 ### Phase 10: Documentation & Polish
 **Goal:** Complete documentation and prepare for release
 
-82. [ ] Write docstrings for all public functions and classes (Google style)
-83. [ ] Create README with installation and usage examples
-84. [ ] Document `.promptlib.yml` schema and options
-85. [ ] Create example central repository structure
-86. [ ] Add troubleshooting guide
-87. [ ] Run ruff format and fix all linting issues
-88. [ ] Run mypy and resolve all type errors
-89. [ ] Ensure all tests pass with >80% coverage
-90. [ ] Add pre-commit hooks configuration
-91. [ ] Create release script/workflow
-92. [ ] Tag v0.1.0 for MVP release
+82. [x] Write docstrings for all public functions and classes (Google style)
+83. [x] Create README with installation and usage examples
+84. [x] Document `.promptlib.yml` schema and options
+85. [x] Create example central repository structure
+86. [x] Add troubleshooting guide
+87. [x] Run ruff format and fix all linting issues
+88. [x] Run mypy and resolve all type errors
+89. [x] Ensure all tests pass with >80% coverage
+90. [x] Add pre-commit hooks configuration
+91. [x] Create release script/workflow
+92. [x] Tag v0.1.0 for MVP release
 
 ### Progress Tracking
 - **Phase 1:** Steps 1-10 (Foundation)
