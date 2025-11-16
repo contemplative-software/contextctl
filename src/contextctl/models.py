@@ -62,7 +62,12 @@ class _BaseMetadata(BaseModel):
 
 
 class PromptMetadata(_BaseMetadata):
-    """Metadata parsed from a prompt markdown file."""
+    """Metadata parsed from a prompt markdown file.
+
+    Attributes:
+        prompt_id: Unique identifier for the prompt, sourced from frontmatter `id`.
+        title: Optional human-friendly prompt title.
+    """
 
     prompt_id: str = Field(alias="id")
     title: str | None = None
@@ -93,7 +98,11 @@ class PromptMetadata(_BaseMetadata):
 
 
 class RuleMetadata(_BaseMetadata):
-    """Metadata parsed from a rule definition file."""
+    """Metadata parsed from a rule definition file.
+
+    Attributes:
+        rule_id: Unique identifier for the rule, sourced from frontmatter `id`.
+    """
 
     rule_id: str = Field(alias="id")
 
@@ -112,7 +121,14 @@ class RuleMetadata(_BaseMetadata):
 
 
 class RepoConfig(BaseModel):
-    """Configuration stored in `.promptlib.yml` within a repository."""
+    """Configuration stored in `.promptlib.yml` within a repository.
+
+    Attributes:
+        central_repo: Remote URL or local path for the central store.
+        rules: Rule set identifiers to merge via the CLI.
+        prompt_sets: Prompt set identifiers to expose to the repo.
+        version_lock: Optional semantic version pin applied during syncing.
+    """
 
     model_config = ConfigDict(populate_by_name=True, frozen=True)
 
@@ -157,7 +173,14 @@ class RepoConfig(BaseModel):
 
 
 class PromptLibConfig(BaseModel):
-    """Global tool configuration derived from environment variables or defaults."""
+    """Global tool configuration derived from environment variables or defaults.
+
+    Attributes:
+        store_root: Local path hosting cached copies of the central store.
+        sync_timeout_seconds: Timeout used for git network calls.
+        default_output_format: Default CLI output format for prompts and rules.
+        env_prefix: Prefix applied to environment variable overrides.
+    """
 
     model_config = ConfigDict(populate_by_name=True, frozen=True)
 

@@ -125,7 +125,17 @@ def main(
         help="Force a fresh prompt store synchronization before running the command.",
     ),
 ) -> None:
-    """Parse global options, configure shared state, and trigger pre-command sync."""
+    """Parse global options, configure shared state, and optionally sync.
+
+    Args:
+        ctx: Typer context that stores shared CLI state.
+        verbose: Whether to enable verbose console logging.
+        no_sync: Whether to skip prompt store synchronization.
+        force_sync: Whether to force a fresh sync before running the command.
+
+    Raises:
+        typer.BadParameter: When mutually exclusive sync flags are combined.
+    """
     if force_sync and no_sync:
         raise typer.BadParameter("--force-sync cannot be combined with --no-sync")
 
@@ -139,14 +149,22 @@ def main(
 
 @app.command()
 def version(ctx: typer.Context) -> None:
-    """Display the installed contextctl version."""
+    """Display the installed contextctl version.
+
+    Args:
+        ctx: Typer context for the current invocation.
+    """
     state = _ensure_state(ctx)
     state.console.print(f"[success]contextctl {__version__}[/success]")
 
 
 @app.command()
 def init(ctx: typer.Context) -> None:
-    """Interactive wizard that creates `.promptlib.yml` in the current repository."""
+    """Run the interactive wizard that creates `.promptlib.yml`.
+
+    Args:
+        ctx: Typer context for the current invocation.
+    """
     state = _ensure_state(ctx)
     console = state.console
 
@@ -230,7 +248,13 @@ def rules(
         help="Write Cursor-formatted output to `.cursor/rules/contextctl.mdc`.",
     ),
 ) -> None:
-    """Render and optionally persist the configured rule sets."""
+    """Render configured rule sets and optionally save the output.
+
+    Args:
+        ctx: Typer context for the current invocation.
+        output_format: Preferred output format for rule content.
+        save: Whether to persist Cursor-formatted output in `.cursor/rules`.
+    """
     state = _ensure_state(ctx)
     if not state.prepared:
         _prepare_environment(state)
@@ -305,7 +329,16 @@ def list_prompts(
         help="Require prompts to include every provided tag instead of matching any tag.",
     ),
 ) -> None:
-    """Render a paginated table of prompts relevant to the current repository."""
+    """Render a paginated table of prompts for the current repository.
+
+    Args:
+        ctx: Typer context for the current invocation.
+        tag: Optional tag filters applied before pagination.
+        all_prompts: Whether to ignore repo associations during listing.
+        page: Page number to display (1-indexed).
+        per_page: Number of prompts to show per page.
+        match_all_tags: Whether prompts must include every provided tag.
+    """
     state = _ensure_state(ctx)
     if not state.prepared:
         _prepare_environment(state)
@@ -386,7 +419,16 @@ def search(
         help="Maximum number of results to display.",
     ),
 ) -> None:
-    """Search prompt content and display contextual snippets."""
+    """Search prompt content and display contextual snippets.
+
+    Args:
+        ctx: Typer context for the current invocation.
+        terms: Search terms that define the query.
+        tag: Optional tag filters applied before searching.
+        all_prompts: Whether to search outside the current repo scope.
+        exact: Whether to require exact phrase matches.
+        limit: Maximum number of search results to display.
+    """
     state = _ensure_state(ctx)
     if not state.prepared:
         _prepare_environment(state)
@@ -471,7 +513,17 @@ def run(
         help="Allow running prompts that are not associated with the current repository.",
     ),
 ) -> None:
-    """Render a prompt by id with optional variable interpolation."""
+    """Render a prompt by id with optional variable interpolation.
+
+    Args:
+        ctx: Typer context for the current invocation.
+        prompt_id: Identifier of the prompt to render.
+        var: Optional `KEY=VALUE` assignments applied to the body.
+        output_format: Preferred output format for the rendered prompt.
+        copy_to_clipboard: Whether to copy the rendered prompt to the clipboard.
+        output_path: Optional file path to persist the rendered prompt.
+        all_prompts: Whether to include prompts outside the current repo scope.
+    """
     state = _ensure_state(ctx)
     if not state.prepared:
         _prepare_environment(state)
@@ -574,7 +626,14 @@ def tree(
         help="Only display prompts and rules associated with the current repository.",
     ),
 ) -> None:
-    """Render a hierarchical view of the prompt and rule library."""
+    """Render a hierarchical view of the prompt and rule library.
+
+    Args:
+        ctx: Typer context for the current invocation.
+        collapse_prompts: Whether to collapse the prompts section.
+        collapse_rules: Whether to collapse the rules section.
+        repo_only: Whether to restrict the tree to repo-relevant items.
+    """
     state = _ensure_state(ctx)
     if not state.prepared:
         _prepare_environment(state)

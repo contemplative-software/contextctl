@@ -1,6 +1,6 @@
 [project]
 name = "contextctl"
-version = "0.0.1"
+version = "0.1.0"
 description = "ContextCtl is a repo-aware prompt and rule manager. It pulls the right context for any codebase from a central store, so teams can use consistent, up-to-date prompts with any AI tool."
 readme = "README.md"
 authors = [{ name = "Darec Stowell", email = "darec.specmaker@gmail.com" }]

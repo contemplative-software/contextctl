@@ -21,6 +21,12 @@ from contextctl import (
     scan_rules_dir,
     search_prompts,
 )
+from contextctl.content import (
+    _fuzzy_match_score,
+    _load_document,
+    _normalize_query_values,
+    _token_match_score,
+)
 
 
 @contextmanager
@@ -57,6 +63,51 @@ def test_parse_frontmatter_requires_delimiters() -> None:
     """Missing YAML delimiters should raise a ContentError."""
     with expect_raises(ContentError):
         parse_frontmatter("id: missing-delimiters")
+
+
+def test_parse_frontmatter_requires_closing_delimiter() -> None:
+    """Frontmatter blocks must be properly terminated."""
+    raw = dedent(
+        """
+        ---
+        id: missing-close
+        """,
+    ).lstrip()
+
+    with expect_raises(ContentError):
+        parse_frontmatter(raw)
+
+
+def test_parse_frontmatter_rejects_invalid_yaml() -> None:
+    """Invalid YAML content should raise ContentError."""
+    raw = dedent(
+        """
+        ---
+        : bad
+        ---
+        body
+        """,
+    ).lstrip()
+
+    with expect_raises(ContentError):
+        parse_frontmatter(raw)
+
+
+def test_parse_frontmatter_requires_mapping() -> None:
+    """Frontmatter must deserialize into a mapping structure."""
+    raw = dedent(
+        """
+        ---
+        - not
+        - a
+        - mapping
+        ---
+        body
+        """,
+    ).lstrip()
+
+    with expect_raises(ContentError):
+        parse_frontmatter(raw)
 
 
 def test_load_prompt_parses_document(tmp_path: Path) -> None:
@@ -193,6 +244,14 @@ def test_filter_by_repo_includes_repo_agnostic_prompts(
     assert {doc.metadata.prompt_id for doc in filtered} == {"incident-response", "global"}
 
 
+def test_filter_by_repo_returns_input_when_repo_slug_blank(sample_prompt_store: Path) -> None:
+    """Providing a blank repo slug should return the original prompts."""
+    prompts = scan_prompts_dir(sample_prompt_store)
+
+    assert filter_by_repo(prompts, None) == prompts
+    assert filter_by_repo(prompts, "  ") == prompts
+
+
 def test_filter_by_tags_supports_any_and_all_modes(
     sample_prompt_store: Path,
     tmp_path: Path,
@@ -217,6 +276,23 @@ def test_filter_by_tags_supports_any_and_all_modes(
 
     assert {doc.metadata.prompt_id for doc in any_match} >= {"review-pr", "multi"}
     assert [doc.metadata.prompt_id for doc in all_match] == ["multi"]
+
+
+def test_filter_by_tags_skips_documents_without_tags(tmp_path: Path) -> None:
+    """Documents lacking tags should not satisfy tag filters."""
+    prompt = PromptDocument(
+        metadata=PromptMetadata(
+            id="untagged",
+            tags=[],
+            repos=[],
+            agents=[],
+            version="0.1.0",
+        ),
+        body="Body",
+        path=tmp_path / "untagged.md",
+    )
+
+    assert filter_by_tags([prompt], ["any"]) == []
 
 
 def test_filter_by_agent_matches_requested_agents(sample_prompt_store: Path) -> None:
@@ -249,6 +325,13 @@ def test_filter_by_agent_includes_agent_agnostic_prompts(
     filtered = filter_by_agent([*prompts, neutral], "cursor")
 
     assert {doc.metadata.prompt_id for doc in filtered} == {"review-pr", "neutral"}
+
+
+def test_filter_by_agent_returns_all_when_no_filter(sample_prompt_store: Path) -> None:
+    """If no agent filter is provided, the original documents should be returned."""
+    prompts = scan_prompts_dir(sample_prompt_store)
+
+    assert filter_by_agent(prompts, None) == prompts
 
 
 def test_search_prompts_matches_body_tokens(sample_prompt_store: Path) -> None:
@@ -293,3 +376,37 @@ def test_search_prompts_rejects_blank_queries(sample_prompt_store: Path) -> None
 
     with expect_raises(ContentError):
         search_prompts(prompts, "   ")
+
+
+def test_scan_prompts_dir_rejects_non_directory(tmp_path: Path) -> None:
+    """If prompts/ exists as a file it should raise a ContentError."""
+    store_root = tmp_path / "store"
+    store_root.mkdir()
+    prompts_file = store_root / "prompts"
+    prompts_file.write_text("not a directory", encoding="utf-8")
+
+    with expect_raises(ContentError):
+        scan_prompts_dir(store_root)
+
+
+def test_load_document_requires_existing_file(tmp_path: Path) -> None:
+    """_load_document should raise when the file does not exist."""
+    with expect_raises(ContentError):
+        _load_document(tmp_path / "missing.md", PromptMetadata)
+
+
+def test_normalize_query_values_handles_none_and_blanks() -> None:
+    """_normalize_query_values should drop blank inputs."""
+    assert _normalize_query_values(None) == set()
+    assert _normalize_query_values(["  "]) == set()
+    assert _normalize_query_values([" Foo ", "FOO"]) == {"foo"}
+
+
+def test_token_match_score_handles_empty_tokens() -> None:
+    """_token_match_score should return zero when no search tokens exist."""
+    assert _token_match_score([], "haystack") == 0.0
+
+
+def test_fuzzy_match_score_handles_empty_candidates() -> None:
+    """_fuzzy_match_score should return zero when there are no candidates."""
+    assert _fuzzy_match_score(set(), "prompt-id") == 0.0

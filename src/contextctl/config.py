@@ -22,7 +22,17 @@ class ConfigError(RuntimeError):
 
 
 def find_repo_root(start_path: Path | None = None) -> Path:
-    """Return the git repository root for the provided path."""
+    """Return the git repository root for the provided path.
+
+    Args:
+        start_path: Optional starting path used to discover the git root.
+
+    Returns:
+        Path pointing to the git root directory.
+
+    Raises:
+        ConfigError: If no git repository boundary can be located.
+    """
     path = (start_path or Path.cwd()).resolve()
     if path.is_file():
         path = path.parent
@@ -42,7 +52,20 @@ def load_repo_config(
     promptlib_config: PromptLibConfig | None = None,
     config_filename: str = REPO_CONFIG_FILENAME,
 ) -> RepoConfig:
-    """Load `.promptlib.yml` from the repository root and apply overrides."""
+    """Load `.promptlib.yml` from the repository root and apply overrides.
+
+    Args:
+        start_path: Optional starting path used to locate the repo root.
+        env: Mapping of environment variables to consider for overrides.
+        promptlib_config: Global prompt library configuration settings.
+        config_filename: Repository configuration filename.
+
+    Returns:
+        RepoConfig populated with file contents and environment overrides.
+
+    Raises:
+        ConfigError: If the file is missing or fails validation.
+    """
     repo_root = find_repo_root(start_path)
     config_path = repo_root / config_filename
     if not config_path.exists():
@@ -67,7 +90,17 @@ def create_default_config(
     prompt_sets: Iterable[str] | None = None,
     version_lock: str | None = None,
 ) -> RepoConfig:
-    """Create a RepoConfig instance populated with sensible defaults."""
+    """Create a `RepoConfig` instance populated with sensible defaults.
+
+    Args:
+        central_repo: Remote URL or path for the central prompt repository.
+        rules: Iterable of rule set identifiers to include.
+        prompt_sets: Iterable of prompt set identifiers to include.
+        version_lock: Optional semantic version pin.
+
+    Returns:
+        RepoConfig ready for serialization or persistence.
+    """
     payload: dict[str, Any] = {
         "central_repo": central_repo,
         "rules": list(rules or []),
