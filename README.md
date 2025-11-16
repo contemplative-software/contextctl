@@ -1,6 +1,6 @@
 # contextctl
 
-`contextctl` is a repo-aware CLI that keeps prompts and rules consistent across every codebase. It pulls the right content from a central Git repository, filters it for the current repo, and outputs the result in formats that work with Cursor, Claude Code, and other AI IDEs.
+`contextctl` is a repo-aware CLI that keeps prompts and rules consistent across every codebase. It pulls the right content from a central Git repository, filters it for the current repo, and outputs the result in formats that work with Cursor, Claude Code, and other coding agents.
 
 ## Features
 
