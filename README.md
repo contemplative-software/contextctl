@@ -16,7 +16,7 @@
 ### From Source (recommended for now)
 
 ```bash
-git clone https://github.com/YOUR_ORG/contextctl.git
+git clone https://github.com/contemplative-software/contextctl.git
 cd contextctl
 
 # Install dependencies into a UV-managed environment
