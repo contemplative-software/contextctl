@@ -11,10 +11,10 @@ def copy_to_clipboard(content: str) -> None:
     """Copy the provided text to the system clipboard.
     
     Args:
-        content: Text content to copy to clipboard.
+        content: Text to copy to clipboard.
         
     Raises:
-        RuntimeError: If clipboard integration is not available or fails.
+        RuntimeError: If clipboard integration is unavailable or fails.
     """
     try:
         import pyperclip  # type: ignore[import-untyped]
@@ -51,7 +51,7 @@ def _run_clipboard_command(command: list[str], content: str) -> None:
     
     Args:
         command: Command and arguments to execute.
-        content: Text content to send to the command.
+        content: Text to pass to the command via stdin.
         
     Raises:
         RuntimeError: If the command fails.

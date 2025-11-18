@@ -1,70 +1,45 @@
-"""Filtering and searching utilities for documents."""
+"""Document filtering and search utilities."""
 
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
-from pathlib import Path
+from collections.abc import Sequence
 from typing import Final
 
 from contextctl import PromptDocument, search_prompts
-from contextctl.content import BaseDocument
 
 _VARIABLE_PATTERN: Final[re.Pattern[str]] = re.compile(r"{{\s*([A-Za-z0-9_.-]+)\s*}}")
-
-
-def paginate_items[DocumentT: BaseDocument](
-    items: Sequence[DocumentT], page: int, per_page: int
-) -> tuple[list[DocumentT], int, int]:
-    """Return paginated items, total pages, and the resolved page number.
-    
-    Args:
-        items: Items to paginate.
-        page: Requested page number (1-indexed).
-        per_page: Number of items per page.
-        
-    Returns:
-        Tuple of (paginated_items, total_pages, resolved_page).
-    """
-    if not items:
-        return [], 1, 1
-    total = len(items)
-    total_pages = max(1, (total + per_page - 1) // per_page)
-    resolved_page = min(page, total_pages)
-    start = (resolved_page - 1) * per_page
-    end = start + per_page
-    return list(items[start:end]), total_pages, resolved_page
 
 
 def execute_search(documents: Sequence[PromptDocument], query: str, *, exact: bool) -> list[PromptDocument]:
     """Execute a fuzzy or exact search across prompt documents.
     
     Args:
-        documents: Documents to search.
+        documents: Prompt documents to search.
         query: Search query string.
         exact: Whether to require exact phrase matches.
         
     Returns:
-        List of matching documents.
+        List of matching prompt documents.
     """
     if exact:
         normalized_query = query.casefold()
         results: list[PromptDocument] = []
         for document in documents:
-            if normalized_query in prompt_search_haystack(document):
+            if normalized_query in _prompt_search_haystack(document):
                 results.append(document)
         return results
     return search_prompts(documents, query)
 
 
-def prompt_search_haystack(document: PromptDocument) -> str:
+def _prompt_search_haystack(document: PromptDocument) -> str:
     """Return the lowercased haystack string for prompt searching.
     
     Args:
         document: Prompt document to build haystack from.
         
     Returns:
-        Lowercased searchable text.
+        Lowercase combined string of all searchable fields.
     """
     metadata = document.metadata
     parts = [
@@ -82,11 +57,11 @@ def find_prompt_by_id(documents: Sequence[PromptDocument], prompt_id: str) -> Pr
     """Return the prompt document whose id matches the provided value.
     
     Args:
-        documents: Documents to search.
-        prompt_id: Prompt identifier to find.
+        documents: Prompt documents to search.
+        prompt_id: Identifier to search for.
         
     Returns:
-        Matching document or None if not found.
+        Matching prompt document or None if not found.
     """
     normalized = prompt_id.strip().casefold()
     if not normalized:
@@ -104,10 +79,10 @@ def parse_variable_assignments(assignments: Sequence[str] | None) -> dict[str, s
         assignments: List of KEY=VALUE strings.
         
     Returns:
-        Dictionary of variable assignments.
+        Dictionary of parsed variable assignments.
         
     Raises:
-        ValueError: If assignments are malformed.
+        ValueError: If an assignment is malformed.
     """
     if not assignments:
         return {}
@@ -127,16 +102,16 @@ def parse_variable_assignments(assignments: Sequence[str] | None) -> dict[str, s
 
 def apply_prompt_variables(
     body: str,
-    assignments: Mapping[str, str],
+    assignments: dict[str, str],
 ) -> tuple[str, set[str], set[str]]:
     """Substitute `{{variable}}` placeholders using the provided assignments.
     
     Args:
         body: Prompt body with variable placeholders.
-        assignments: Variable name to value mappings.
+        assignments: Dictionary of variable assignments.
         
     Returns:
-        Tuple of (rendered_body, missing_variables, used_variables).
+        Tuple of (rendered_body, missing_vars, used_vars).
     """
     if not assignments:
         return body, set(), set()
@@ -155,42 +130,3 @@ def apply_prompt_variables(
 
     rendered = _VARIABLE_PATTERN.sub(replacer, body)
     return rendered, missing, used
-
-
-def write_output_file(path: Path, content: str) -> Path:
-    """Persist rendered prompt content to disk and return the resulting path.
-    
-    Args:
-        path: Output file path.
-        content: Content to write.
-        
-    Returns:
-        Resolved path to the written file.
-        
-    Raises:
-        OSError: If the path is a directory or write fails.
-    """
-    target = path.expanduser()
-    if target.exists() and target.is_dir():
-        msg = f"{target} is a directory"
-        raise OSError(msg)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(content, encoding="utf-8")
-    return target.resolve()
-
-
-def write_cursor_rules_file(content: str, *, repo_root: Path) -> Path:
-    """Persist Cursor-formatted rules within `.cursor/rules/`.
-    
-    Args:
-        content: Rule content to write.
-        repo_root: Repository root directory.
-        
-    Returns:
-        Path to the written file.
-    """
-    rules_dir = repo_root / ".cursor" / "rules"
-    rules_dir.mkdir(parents=True, exist_ok=True)
-    target = rules_dir / "contextctl.mdc"
-    target.write_text(content, encoding="utf-8")
-    return target
