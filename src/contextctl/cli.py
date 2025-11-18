@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Final
 
 import typer
-from rich.console import Console
 
 from contextctl import (
     REPO_CONFIG_FILENAME,
@@ -26,7 +25,7 @@ from contextctl import (
     scan_rules_dir,
     sync_central_repo,
 )
-from contextctl._internal.clipboard import copy_to_clipboard
+from contextctl._internal.clipboard import copy_to_clipboard as clipboard_copy
 from contextctl._internal.commands.init_cmd import (
     confirm_overwrite,
     load_existing_config,
@@ -551,7 +550,7 @@ def run(
 
     if copy_to_clipboard:
         try:
-            copy_to_clipboard(formatted_output)
+            clipboard_copy(formatted_output)
         except RuntimeError as exc:
             _abort(state, f"Unable to copy prompt to clipboard: {exc}")
             return
@@ -635,13 +634,13 @@ def tree(
 
 def _get_state(ctx: typer.Context, *, verbose: bool, skip_sync: bool, force_sync: bool) -> CLIState:
     """Return the CLI state stored on the Typer context, creating it if necessary.
-    
+
     Args:
         ctx: Typer context.
         verbose: Whether verbose logging is enabled.
         skip_sync: Whether to skip synchronization.
         force_sync: Whether to force synchronization.
-        
+
     Returns:
         CLIState instance.
     """
@@ -665,7 +664,7 @@ def _get_state(ctx: typer.Context, *, verbose: bool, skip_sync: bool, force_sync
 
 def _prepare_environment(state: CLIState) -> None:
     """Load repo configuration and, unless disabled, sync the prompt store.
-    
+
     Args:
         state: CLI state to update.
     """
@@ -696,7 +695,7 @@ def _prepare_environment(state: CLIState) -> None:
 
 def _force_refresh_cache(state: CLIState, repo_config: RepoConfig) -> None:
     """Remove the cached store before syncing when `--force-sync` is provided.
-    
+
     Args:
         state: CLI state.
         repo_config: Repository configuration.
@@ -712,7 +711,7 @@ def _force_refresh_cache(state: CLIState, repo_config: RepoConfig) -> None:
 
 def _abort(state: CLIState, message: str, *, exit_code: int = 1) -> None:
     """Print a styled error message and exit the CLI.
-    
+
     Args:
         state: CLI state.
         message: Error message to display.
@@ -724,10 +723,10 @@ def _abort(state: CLIState, message: str, *, exit_code: int = 1) -> None:
 
 def _ensure_state(ctx: typer.Context) -> CLIState:
     """Return the CLI state, creating a minimal default if the callback was bypassed.
-    
+
     Args:
         ctx: Typer context.
-        
+
     Returns:
         CLIState instance.
     """
@@ -747,11 +746,11 @@ def _ensure_state(ctx: typer.Context) -> CLIState:
 
 def _require_store_path(state: CLIState, repo_config: RepoConfig) -> Path:
     """Return the path to the prompt store, ensuring it exists locally.
-    
+
     Args:
         state: CLI state.
         repo_config: Repository configuration.
-        
+
     Returns:
         Path to the prompt store.
     """

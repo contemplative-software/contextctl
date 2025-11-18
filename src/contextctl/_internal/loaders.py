@@ -15,14 +15,14 @@ _PROMPT_FILE_SUFFIXES: Final[tuple[str, ...]] = (".md", ".markdown")
 
 def load_selected_rules(store_path: Path, selections: Sequence[str]) -> list[RuleDocument]:
     """Load and return rule documents that match the configured selections.
-    
+
     Args:
         store_path: Root of the synchronized prompt store.
         selections: List of rule set identifiers to load.
-        
+
     Returns:
         List of loaded RuleDocument instances.
-        
+
     Raises:
         ContentError: If selections cannot be resolved or loaded.
     """
@@ -50,11 +50,11 @@ def load_selected_rules(store_path: Path, selections: Sequence[str]) -> list[Rul
 
 def _load_rules_for_selection(rules_root: Path, selection: str) -> list[RuleDocument]:
     """Return RuleDocument instances for a specific selection entry.
-    
+
     Args:
         rules_root: Path to the rules directory.
         selection: Rule set identifier.
-        
+
     Returns:
         List of loaded rule documents.
     """
@@ -69,11 +69,11 @@ def _load_rules_for_selection(rules_root: Path, selection: str) -> list[RuleDocu
 
 def _resolve_selection_directory(rules_root: Path, selection: str) -> Path | None:
     """Return the directory that matches the selection, if present.
-    
+
     Args:
         rules_root: Path to the rules directory.
         selection: Directory name to resolve.
-        
+
     Returns:
         Resolved directory path or None if not found.
     """
@@ -88,11 +88,11 @@ def _resolve_selection_directory(rules_root: Path, selection: str) -> Path | Non
 
 def _resolve_selection_files(rules_root: Path, selection: str) -> list[Path]:
     """Return file paths that match a selection string.
-    
+
     Args:
         rules_root: Path to the rules directory.
         selection: File name or stem to resolve.
-        
+
     Returns:
         List of matching file paths.
     """
@@ -119,10 +119,10 @@ def _resolve_selection_files(rules_root: Path, selection: str) -> list[Path]:
 
 def _collect_rule_files(directory: Path) -> list[Path]:
     """Return rule documents discovered beneath the provided directory.
-    
+
     Args:
         directory: Directory to search for rule files.
-        
+
     Returns:
         Sorted list of rule file paths.
     """
@@ -133,11 +133,11 @@ def _collect_rule_files(directory: Path) -> list[Path]:
 
 def _is_within_root(path: Path, root: Path) -> bool:
     """Return True if the provided path is within the expected root directory.
-    
+
     Args:
         path: Path to check.
         root: Expected root directory.
-        
+
     Returns:
         True if path is within root, False otherwise.
     """
@@ -150,14 +150,14 @@ def _is_within_root(path: Path, root: Path) -> bool:
 
 def load_prompt_documents(store_path: Path, selections: Sequence[str]) -> list[PromptDocument]:
     """Load prompt documents honoring the configured prompt set selections.
-    
+
     Args:
         store_path: Root of the synchronized prompt store.
         selections: List of prompt set identifiers to load.
-        
+
     Returns:
         List of loaded PromptDocument instances.
-        
+
     Raises:
         ContentError: If selections cannot be resolved or loaded.
     """
@@ -197,11 +197,11 @@ def load_prompt_documents(store_path: Path, selections: Sequence[str]) -> list[P
 
 def _load_prompts_for_selection(prompts_root: Path, selection: str) -> list[Path]:
     """Return prompt file paths for a specific selection entry.
-    
+
     Args:
         prompts_root: Path to the prompts directory.
         selection: Prompt set identifier.
-        
+
     Returns:
         List of prompt file paths.
     """
@@ -213,11 +213,11 @@ def _load_prompts_for_selection(prompts_root: Path, selection: str) -> list[Path
 
 def _resolve_prompt_selection_files(prompts_root: Path, selection: str) -> list[Path]:
     """Return prompt file paths that match a selection string.
-    
+
     Args:
         prompts_root: Path to the prompts directory.
         selection: File name or stem to resolve.
-        
+
     Returns:
         List of matching file paths.
     """
@@ -244,10 +244,10 @@ def _resolve_prompt_selection_files(prompts_root: Path, selection: str) -> list[
 
 def _collect_prompt_files(directory: Path) -> list[Path]:
     """Return prompt documents discovered beneath the provided directory.
-    
+
     Args:
         directory: Directory to search for prompt files.
-        
+
     Returns:
         Sorted list of prompt file paths.
     """
@@ -260,10 +260,10 @@ def _collect_prompt_files(directory: Path) -> list[Path]:
 
 def list_allowed_files(directory: Path) -> list[Path]:
     """Return files within the directory matching supported suffixes.
-    
+
     Args:
         directory: Directory to search.
-        
+
     Returns:
         List of files with allowed suffixes.
     """

@@ -13,12 +13,12 @@ _VARIABLE_PATTERN: Final[re.Pattern[str]] = re.compile(r"{{\s*([A-Za-z0-9_.-]+)\
 
 def execute_search(documents: Sequence[PromptDocument], query: str, *, exact: bool) -> list[PromptDocument]:
     """Execute a fuzzy or exact search across prompt documents.
-    
+
     Args:
         documents: Prompt documents to search.
         query: Search query string.
         exact: Whether to require exact phrase matches.
-        
+
     Returns:
         List of matching prompt documents.
     """
@@ -34,10 +34,10 @@ def execute_search(documents: Sequence[PromptDocument], query: str, *, exact: bo
 
 def _prompt_search_haystack(document: PromptDocument) -> str:
     """Return the lowercased haystack string for prompt searching.
-    
+
     Args:
         document: Prompt document to build haystack from.
-        
+
     Returns:
         Lowercase combined string of all searchable fields.
     """
@@ -55,11 +55,11 @@ def _prompt_search_haystack(document: PromptDocument) -> str:
 
 def find_prompt_by_id(documents: Sequence[PromptDocument], prompt_id: str) -> PromptDocument | None:
     """Return the prompt document whose id matches the provided value.
-    
+
     Args:
         documents: Prompt documents to search.
         prompt_id: Identifier to search for.
-        
+
     Returns:
         Matching prompt document or None if not found.
     """
@@ -74,13 +74,13 @@ def find_prompt_by_id(documents: Sequence[PromptDocument], prompt_id: str) -> Pr
 
 def parse_variable_assignments(assignments: Sequence[str] | None) -> dict[str, str]:
     """Parse `--var` key=value pairs into a dictionary.
-    
+
     Args:
         assignments: List of KEY=VALUE strings.
-        
+
     Returns:
         Dictionary of parsed variable assignments.
-        
+
     Raises:
         ValueError: If an assignment is malformed.
     """
@@ -105,11 +105,11 @@ def apply_prompt_variables(
     assignments: dict[str, str],
 ) -> tuple[str, set[str], set[str]]:
     """Substitute `{{variable}}` placeholders using the provided assignments.
-    
+
     Args:
         body: Prompt body with variable placeholders.
         assignments: Dictionary of variable assignments.
-        
+
     Returns:
         Tuple of (rendered_body, missing_vars, used_vars).
     """

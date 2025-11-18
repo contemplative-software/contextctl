@@ -14,15 +14,15 @@ _RULE_SECTION_DIVIDER: Final[str] = "\n\n---\n\n"
 
 def format_rules(documents: Sequence[RuleDocument], format_name: str, store_path: Path) -> str:
     """Return the merged rule content formatted according to the requested output.
-    
+
     Args:
         documents: Rule documents to format.
         format_name: Output format (text, json, or cursor).
         store_path: Path to the prompt store for relative path resolution.
-        
+
     Returns:
         Formatted rule content.
-        
+
     Raises:
         ValueError: If format_name is not supported.
     """
@@ -38,10 +38,10 @@ def format_rules(documents: Sequence[RuleDocument], format_name: str, store_path
 
 def format_rules_as_text(documents: Sequence[RuleDocument]) -> str:
     """Return merged rule content as plain text with lightweight headings.
-    
+
     Args:
         documents: Rule documents to format.
-        
+
     Returns:
         Text-formatted rule content.
     """
@@ -55,11 +55,11 @@ def format_rules_as_text(documents: Sequence[RuleDocument]) -> str:
 
 def format_rules_as_json(documents: Sequence[RuleDocument], store_path: Path) -> str:
     """Return merged rule content as a JSON array.
-    
+
     Args:
         documents: Rule documents to format.
         store_path: Path to the prompt store for relative path resolution.
-        
+
     Returns:
         JSON-formatted rule content.
     """
@@ -82,10 +82,10 @@ def format_rules_as_json(documents: Sequence[RuleDocument], store_path: Path) ->
 
 def format_rules_as_cursor(documents: Sequence[RuleDocument]) -> str:
     """Return merged rule content optimized for `.cursor/rules` consumption.
-    
+
     Args:
         documents: Rule documents to format.
-        
+
     Returns:
         Cursor-formatted rule content.
     """
@@ -116,16 +116,16 @@ def format_prompt_output(
     store_path: Path,
 ) -> str:
     """Return the rendered prompt in the requested output format.
-    
+
     Args:
         document: Prompt document to format.
         body: Rendered prompt body (with variables substituted).
         format_name: Output format (text or json).
         store_path: Path to the prompt store for relative path resolution.
-        
+
     Returns:
         Formatted prompt output.
-        
+
     Raises:
         ValueError: If format_name is not supported.
     """
@@ -154,11 +154,11 @@ def format_prompt_output(
 
 def relative_source(path: Path, store_path: Path) -> str:
     """Return the document path relative to the store root, if possible.
-    
+
     Args:
         path: Absolute path to the document.
         store_path: Path to the prompt store.
-        
+
     Returns:
         Relative path string or absolute path if not within store.
     """

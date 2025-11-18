@@ -16,7 +16,7 @@ DocumentT = TypeVar("DocumentT", bound=BaseDocument)
 @dataclass(frozen=True, slots=True)
 class SetPreview:
     """Simple representation of the available rule or prompt sets.
-    
+
     Attributes:
         name: Set name/identifier.
         item_count: Number of items in the set.
@@ -31,7 +31,7 @@ class SetPreview:
 @dataclass(frozen=True, slots=True)
 class StorePreview:
     """Collection of preview information for store contents.
-    
+
     Attributes:
         rule_sets: Preview of available rule sets.
         prompt_sets: Preview of available prompt sets.
@@ -41,16 +41,16 @@ class StorePreview:
     prompt_sets: list[SetPreview]
 
 
-def paginate_items(
+def paginate_items[DocumentT: BaseDocument](
     items: Sequence[DocumentT], page: int, per_page: int
 ) -> tuple[list[DocumentT], int, int]:
     """Return paginated items, total pages, and the resolved page number.
-    
+
     Args:
         items: Items to paginate.
         page: Requested page number (1-indexed).
         per_page: Number of items per page.
-        
+
     Returns:
         Tuple of (paginated_items, total_pages, resolved_page).
     """
@@ -66,7 +66,7 @@ def paginate_items(
 
 def resolve_repo_slug() -> str | None:
     """Return the repository slug derived from the git root directory name.
-    
+
     Returns:
         Repository slug or None if not in a git repository.
     """
@@ -78,14 +78,14 @@ def resolve_repo_slug() -> str | None:
 
 def write_output_file(path: Path, content: str) -> Path:
     """Persist rendered prompt content to disk and return the resulting path.
-    
+
     Args:
         path: Target file path.
         content: Content to write.
-        
+
     Returns:
         Resolved path to the written file.
-        
+
     Raises:
         OSError: If the path is a directory or writing fails.
     """
@@ -100,11 +100,11 @@ def write_output_file(path: Path, content: str) -> Path:
 
 def write_cursor_rules_file(content: str, *, repo_root: Path) -> Path:
     """Persist Cursor-formatted rules within `.cursor/rules/`.
-    
+
     Args:
         content: Formatted rules content.
         repo_root: Repository root directory.
-        
+
     Returns:
         Path to the written rules file.
     """
@@ -117,10 +117,10 @@ def write_cursor_rules_file(content: str, *, repo_root: Path) -> Path:
 
 def normalize_csv(raw_value: str) -> list[str]:
     """Split comma-separated input and remove duplicates.
-    
+
     Args:
         raw_value: Comma-separated string.
-        
+
     Returns:
         List of unique normalized values.
     """
@@ -140,11 +140,11 @@ def normalize_csv(raw_value: str) -> list[str]:
 
 def summarize_files(files: Sequence[Path], limit: int = 3) -> list[str]:
     """Return a short preview of file stems for display.
-    
+
     Args:
         files: File paths to summarize.
         limit: Maximum number of items to include.
-        
+
     Returns:
         List of file stems with ellipsis if truncated.
     """

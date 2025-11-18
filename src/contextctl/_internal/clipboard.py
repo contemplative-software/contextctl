@@ -9,10 +9,10 @@ import sys
 
 def copy_to_clipboard(content: str) -> None:
     """Copy the provided text to the system clipboard.
-    
+
     Args:
         content: Text to copy to clipboard.
-        
+
     Raises:
         RuntimeError: If clipboard integration is unavailable or fails.
     """
@@ -48,11 +48,11 @@ def copy_to_clipboard(content: str) -> None:
 
 def _run_clipboard_command(command: list[str], content: str) -> None:
     """Execute a clipboard command with the provided string content.
-    
+
     Args:
         command: Command and arguments to execute.
         content: Text to pass to the command via stdin.
-        
+
     Raises:
         RuntimeError: If the command fails.
     """

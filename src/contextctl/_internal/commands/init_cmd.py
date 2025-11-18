@@ -8,8 +8,8 @@ from pathlib import Path
 import typer
 import yaml
 from pydantic import ValidationError
-from rich.console import Console
 from rich import box
+from rich.console import Console
 from rich.table import Table
 
 from contextctl import (
@@ -17,7 +17,6 @@ from contextctl import (
     PromptLibConfig,
     RepoConfig,
     StoreSyncError,
-    create_default_config,
     sync_central_repo,
 )
 from contextctl._internal.loaders import list_allowed_files
@@ -29,11 +28,11 @@ def load_existing_config(repo_root: Path, console: Console) -> RepoConfig | None
 
     Loads the YAML file directly without applying environment overrides to avoid
     baking transient environment values into the persisted configuration.
-    
+
     Args:
         repo_root: Repository root directory.
         console: Rich console for warnings.
-        
+
     Returns:
         Loaded RepoConfig or None if not found or invalid.
     """
@@ -50,10 +49,10 @@ def load_existing_config(repo_root: Path, console: Console) -> RepoConfig | None
 
 def confirm_overwrite(console: Console) -> bool:
     """Prompt the user before overwriting an existing config file.
-    
+
     Args:
         console: Rich console (unused but kept for consistency).
-        
+
     Returns:
         True if user confirms overwrite.
     """
@@ -65,10 +64,10 @@ def confirm_overwrite(console: Console) -> bool:
 
 def prompt_central_repo(existing_config: RepoConfig | None) -> str:
     """Prompt the user for the central prompt repository location.
-    
+
     Args:
         existing_config: Existing configuration for default value.
-        
+
     Returns:
         Central repository URL or path.
     """
@@ -92,12 +91,12 @@ def load_store_preview(
     console: Console,
 ) -> StorePreview | None:
     """Sync the store once to preview available rule and prompt sets.
-    
+
     Args:
         central_repo: Central repository URL or path.
         promptlib_config: Global prompt library configuration.
         console: Rich console for output.
-        
+
     Returns:
         StorePreview with available sets or None if sync fails.
     """
@@ -129,10 +128,10 @@ def load_store_preview(
 
 def collect_set_previews(base_dir: Path) -> list[SetPreview]:
     """Inspect the provided directory and return previews for each set.
-    
+
     Args:
         base_dir: Directory containing sets (rules or prompts).
-        
+
     Returns:
         List of SetPreview instances.
     """
@@ -170,7 +169,7 @@ def collect_set_previews(base_dir: Path) -> list[SetPreview]:
 
 def render_set_preview(console: Console, title: str, previews: Sequence[SetPreview]) -> None:
     """Render a table describing available prompt or rule sets.
-    
+
     Args:
         console: Rich console for output.
         title: Table title.
@@ -196,13 +195,13 @@ def prompt_set_selection(
     defaults: Sequence[str] | None,
 ) -> list[str]:
     """Prompt the user to select rule or prompt sets.
-    
+
     Args:
         console: Rich console for output.
         label: Label for the sets (e.g., "rule" or "prompt").
         previews: Available set previews.
         defaults: Default selections.
-        
+
     Returns:
         List of selected set identifiers.
     """
@@ -243,7 +242,7 @@ def prompt_set_selection(
 
 def write_repo_config_file(config_path: Path, config: RepoConfig) -> None:
     """Serialize the RepoConfig to YAML on disk.
-    
+
     Args:
         config_path: Path to write the configuration file.
         config: Repository configuration to write.

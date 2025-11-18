@@ -21,7 +21,7 @@ _SNIPPET_CONTEXT_CHARS: Final[int] = 120
 
 def render_rule_summary(console: Console, documents: Sequence[RuleDocument], store_path: Path) -> None:
     """Render a table summarizing the merged rule metadata.
-    
+
     Args:
         console: Rich console for output.
         documents: Rule documents to display.
@@ -64,7 +64,7 @@ def render_prompt_table(
     include_repo_filter: bool,
 ) -> None:
     """Render a Rich table summarizing prompts for the list command.
-    
+
     Args:
         console: Rich console for output.
         prompts: Prompt documents to display.
@@ -112,7 +112,7 @@ def render_search_results(
     exact: bool,
 ) -> None:
     """Display search results with contextual snippets.
-    
+
     Args:
         console: Rich console for output.
         prompts: Prompt documents to display.
@@ -174,7 +174,7 @@ def render_library_tree(
     collapse_rules: bool,
 ) -> None:
     """Render a Rich tree describing the prompt and rule library.
-    
+
     Args:
         console: Rich console for output.
         prompts: Prompt documents to display.
@@ -217,7 +217,7 @@ def _populate_tree_branch(
     repo_slug: str | None,
 ) -> None:
     """Populate a Rich tree branch with document entries grouped by directory.
-    
+
     Args:
         root: Root tree node to populate.
         documents: Documents to add to the tree.
@@ -250,11 +250,11 @@ def _populate_tree_branch(
 
 def format_tree_label(document: BaseDocument, repo_slug: str | None) -> str:
     """Return the textual label for a tree leaf node.
-    
+
     Args:
         document: Document to create a label for.
         repo_slug: Repository slug for relevance marking.
-        
+
     Returns:
         Formatted tree label string.
     """
@@ -269,10 +269,10 @@ def format_tree_label(document: BaseDocument, repo_slug: str | None) -> str:
 
 def document_identifier(document: BaseDocument) -> str:
     """Return the identifier for either a prompt or rule document.
-    
+
     Args:
         document: Document to get identifier from.
-        
+
     Returns:
         Document identifier string.
     """
@@ -288,11 +288,11 @@ def document_identifier(document: BaseDocument) -> str:
 
 def is_repo_relevant(repos: Sequence[str], repo_slug: str | None) -> bool:
     """Return True if the repo slug is included in the metadata repos.
-    
+
     Args:
         repos: List of repository slugs from document metadata.
         repo_slug: Current repository slug.
-        
+
     Returns:
         True if document is relevant to the current repository.
     """
@@ -308,11 +308,11 @@ def is_repo_relevant(repos: Sequence[str], repo_slug: str | None) -> bool:
 
 def _relative_to_base(path: Path, base_dir: Path) -> Path:
     """Return path relative to base_dir, falling back to filename on mismatch.
-    
+
     Args:
         path: Path to make relative.
         base_dir: Base directory for relative calculation.
-        
+
     Returns:
         Relative path or filename.
     """
@@ -324,10 +324,10 @@ def _relative_to_base(path: Path, base_dir: Path) -> Path:
 
 def prompt_display_title(document: PromptDocument) -> str:
     """Return a user-friendly prompt title.
-    
+
     Args:
         document: Prompt document.
-        
+
     Returns:
         Display title for the prompt.
     """
@@ -340,11 +340,11 @@ def prompt_display_title(document: PromptDocument) -> str:
 
 def build_search_snippet(document: PromptDocument, query: str) -> str:
     """Return a contextual snippet for a search result.
-    
+
     Args:
         document: Prompt document to generate snippet from.
         query: Search query for highlighting.
-        
+
     Returns:
         Formatted snippet with highlighted match.
     """

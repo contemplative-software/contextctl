@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 from rich.console import Console
 from rich.theme import Theme
-from typing import Final
 
 from contextctl.models import PromptLibConfig, RepoConfig
 
@@ -38,10 +38,10 @@ class CLIState:
 
 def build_console(verbose: bool) -> Console:
     """Return a Rich console configured with project-specific styling.
-    
+
     Args:
         verbose: Whether to enable verbose logging with timestamps.
-        
+
     Returns:
         Configured Console instance.
     """
