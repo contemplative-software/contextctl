@@ -16,16 +16,12 @@ from contextctl import (
     StoreSyncError,
     __version__,
     clear_store_cache,
-    filter_by_repo,
-    filter_by_tags,
+    create_default_config,
     find_repo_root,
     get_store_path,
     load_repo_config,
-    scan_prompts_dir,
-    scan_rules_dir,
     sync_central_repo,
 )
-from contextctl._internal.clipboard import copy_to_clipboard as clipboard_copy
 from contextctl._internal.commands.init_cmd import (
     confirm_overwrite,
     load_existing_config,
@@ -34,27 +30,13 @@ from contextctl._internal.commands.init_cmd import (
     prompt_set_selection,
     write_repo_config_file,
 )
-from contextctl._internal.filters import (
-    apply_prompt_variables,
-    execute_search,
-    find_prompt_by_id,
-    parse_variable_assignments,
-)
-from contextctl._internal.loaders import load_prompt_documents, load_selected_rules
-from contextctl._internal.output.formatters import format_prompt_output, format_rules
-from contextctl._internal.output.renderers import (
-    render_library_tree,
-    render_prompt_table,
-    render_rule_summary,
-    render_search_results,
-)
+from contextctl._internal.commands.list_cmd import execute_list_command
+from contextctl._internal.commands.rules_cmd import execute_rules_command
+from contextctl._internal.commands.run_cmd import execute_run_command
+from contextctl._internal.commands.search_cmd import execute_search_command
+from contextctl._internal.commands.tree_cmd import execute_tree_command
 from contextctl._internal.state import CLIState, build_console
-from contextctl._internal.utils import (
-    paginate_items,
-    resolve_repo_slug,
-    write_cursor_rules_file,
-    write_output_file,
-)
+from contextctl._internal.utils import resolve_repo_slug
 
 _SKIP_PREP_COMMANDS: Final[set[str]] = {"init"}
 _RULE_OUTPUT_FORMATS: Final[tuple[str, ...]] = ("text", "json", "cursor")
@@ -170,8 +152,6 @@ def init(ctx: typer.Context) -> None:
         defaults=existing_config.prompt_sets if existing_config else None,
     )
 
-    from contextctl import create_default_config
-
     repo_config = create_default_config(
         central_repo,
         rules=rule_sets,
@@ -228,11 +208,6 @@ def rules(
         return
 
     store_path = _require_store_path(state, repo_config)
-    try:
-        documents = load_selected_rules(store_path, repo_config.rules)
-    except ContentError as exc:
-        _abort(state, str(exc))
-        return
 
     format_value = output_format or state.promptlib_config.default_output_format
     normalized_format = format_value.strip().casefold()
@@ -241,17 +216,10 @@ def rules(
         _abort(state, f"Unsupported format '{format_value}'. Supported values: {supported}.")
         return
 
-    render_rule_summary(state.console, documents, store_path)
-    formatted_output = format_rules(documents, normalized_format, store_path)
-    state.console.print()
-    state.console.print(formatted_output, markup=False)
-
-    if save:
-        repo_root = find_repo_root()
-        cursor_payload = format_rules(documents, "cursor", store_path)
-        saved_path = write_cursor_rules_file(cursor_payload, repo_root=repo_root)
-        relative_path = saved_path.relative_to(repo_root)
-        state.console.print(f"[success]Saved Cursor rules to {relative_path}[/success]")
+    try:
+        execute_rules_command(state, store_path, repo_config.rules, normalized_format, save)
+    except ContentError as exc:
+        _abort(state, str(exc))
 
 
 @app.command("list")
@@ -309,41 +277,23 @@ def list_prompts(
         return
 
     store_path = _require_store_path(state, repo_config)
+    repo_slug = resolve_repo_slug()
+    tag_filters = list(tag or [])
+
     try:
-        documents = load_prompt_documents(store_path, repo_config.prompt_sets)
+        execute_list_command(
+            state,
+            store_path,
+            repo_config.prompt_sets,
+            repo_slug,
+            tag_filters,
+            all_prompts,
+            page,
+            per_page,
+            match_all_tags,
+        )
     except ContentError as exc:
         _abort(state, str(exc))
-        return
-
-    repo_slug = resolve_repo_slug()
-    filtered = documents if all_prompts else filter_by_repo(documents, repo_slug)
-    tag_filters = list(tag or [])
-    filtered = filter_by_tags(filtered, tag_filters, match_all=match_all_tags)
-
-    if not filtered:
-        scope = "all prompts" if all_prompts else f"repo '{repo_slug or 'unknown'}'"
-        if tag_filters:
-            scope = f"{scope} with tags {', '.join(tag_filters)}"
-        state.console.print(f"[warning]No prompts matched {scope}. Try relaxing the filters or use --all.[/warning]")
-        return
-
-    paginated, total_pages, resolved_page = paginate_items(filtered, page, per_page)
-    if page > total_pages:
-        state.console.print(
-            f"[warning]Requested page {page} exceeds total pages ({total_pages}). "
-            f"Showing page {resolved_page} instead.[/warning]"
-        )
-
-    render_prompt_table(
-        state.console,
-        paginated,
-        resolved_page,
-        total_pages,
-        total=len(filtered),
-        repo_slug=repo_slug,
-        filtered_tags=tag_filters,
-        include_repo_filter=not all_prompts,
-    )
 
 
 @app.command()
@@ -404,38 +354,23 @@ def search(
         return
 
     store_path = _require_store_path(state, repo_config)
+    repo_slug = resolve_repo_slug()
+    tag_filters = list(tag or [])
+
     try:
-        documents = load_prompt_documents(store_path, repo_config.prompt_sets)
+        execute_search_command(
+            state,
+            store_path,
+            repo_config.prompt_sets,
+            repo_slug,
+            query,
+            tag_filters,
+            all_prompts,
+            exact,
+            limit,
+        )
     except ContentError as exc:
         _abort(state, str(exc))
-        return
-
-    repo_slug = resolve_repo_slug()
-    filtered = documents if all_prompts else filter_by_repo(documents, repo_slug)
-    tag_filters = list(tag or [])
-    filtered = filter_by_tags(filtered, tag_filters)
-
-    results = execute_search(filtered, query, exact=exact)
-    if not results:
-        scope = "all prompts" if all_prompts else f"repo '{repo_slug or 'unknown'}'"
-        state.console.print(
-            f"[warning]No prompts matched query '{query}' within {scope}. "
-            f"Try --all or adjust the search terms.[/warning]"
-        )
-        return
-
-    limited_results = results[:limit]
-    render_search_results(
-        state.console,
-        limited_results,
-        query=query,
-        total=len(results),
-        limit=limit,
-        repo_slug=repo_slug,
-        include_repo_filter=not all_prompts,
-        filtered_tags=tag_filters,
-        exact=exact,
-    )
 
 
 @app.command()
@@ -492,36 +427,14 @@ def run(
     if repo_config is None:
         _abort(state, "Repository configuration is not available.")
         return
+
     prompt_id = prompt_id.strip()
     if not prompt_id:
         _abort(state, "Prompt id cannot be blank.")
         return
 
     store_path = _require_store_path(state, repo_config)
-    try:
-        documents = load_prompt_documents(store_path, repo_config.prompt_sets)
-    except ContentError as exc:
-        _abort(state, str(exc))
-        return
-
     repo_slug = resolve_repo_slug()
-    search_space = documents if all_prompts else filter_by_repo(documents, repo_slug)
-    document = find_prompt_by_id(search_space, prompt_id)
-    if document is None:
-        scope = "all prompts" if all_prompts else f"repo '{repo_slug or 'unknown'}'"
-        available = ", ".join(sorted(doc.metadata.prompt_id for doc in search_space)) or "none"
-        msg = f"Prompt '{prompt_id}' was not found within {scope}. Available prompts: {available}."
-        _abort(state, msg)
-        return
-
-    try:
-        assignments = parse_variable_assignments(var)
-    except ValueError as exc:
-        _abort(state, str(exc))
-        return
-
-    rendered_body, missing_vars, used_vars = apply_prompt_variables(document.body, assignments)
-    unused_vars = sorted(set(assignments) - used_vars)
 
     format_value = output_format or state.promptlib_config.default_output_format
     normalized_format = format_value.strip().casefold() or "text"
@@ -533,36 +446,23 @@ def run(
             _abort(state, f"Unsupported format '{format_value}'. Supported values: {supported}.")
             return
 
-    formatted_output = format_prompt_output(document, rendered_body, normalized_format, store_path)
-
-    if missing_vars:
-        state.console.print(
-            f"[warning]Missing values for variables: {', '.join(sorted(missing_vars))}. "
-            "Placeholders were left intact.[/warning]"
+    try:
+        error_msg, _ = execute_run_command(
+            state,
+            store_path,
+            repo_config.prompt_sets,
+            repo_slug,
+            prompt_id,
+            var,
+            normalized_format,
+            copy_to_clipboard,
+            output_path,
+            all_prompts,
         )
-    if unused_vars:
-        state.console.print(
-            f"[warning]Ignored variable assignments: {', '.join(unused_vars)}. "
-            "No matching placeholders were found.[/warning]"
-        )
-
-    state.console.print(formatted_output, markup=False)
-
-    if copy_to_clipboard:
-        try:
-            clipboard_copy(formatted_output)
-        except RuntimeError as exc:
-            _abort(state, f"Unable to copy prompt to clipboard: {exc}")
-            return
-        state.console.print(f"[success]Copied prompt '{document.metadata.prompt_id}' to clipboard.[/success]")
-
-    if output_path is not None:
-        try:
-            written_path = write_output_file(output_path, formatted_output)
-        except OSError as exc:
-            _abort(state, f"Unable to write output file: {exc}")
-            return
-        state.console.print(f"[success]Wrote prompt output to {written_path}[/success]")
+        if error_msg:
+            _abort(state, error_msg)
+    except (ContentError, ValueError, RuntimeError, OSError) as exc:
+        _abort(state, str(exc))
 
 
 @app.command()
@@ -604,32 +504,9 @@ def tree(
         return
 
     store_path = _require_store_path(state, repo_config)
-    try:
-        prompt_documents = scan_prompts_dir(store_path)
-    except ContentError as exc:
-        state.console.print(f"[warning]Unable to load prompts for tree view: {exc}[/warning]")
-        prompt_documents = []
-
-    try:
-        rule_documents = scan_rules_dir(store_path)
-    except ContentError as exc:
-        state.console.print(f"[warning]Unable to load rules for tree view: {exc}[/warning]")
-        rule_documents = []
-
     repo_slug = resolve_repo_slug()
-    if repo_only:
-        prompt_documents = filter_by_repo(prompt_documents, repo_slug)
-        rule_documents = filter_by_repo(rule_documents, repo_slug)
 
-    render_library_tree(
-        state.console,
-        prompt_documents,
-        rule_documents,
-        store_path=store_path,
-        repo_slug=repo_slug,
-        collapse_prompts=collapse_prompts,
-        collapse_rules=collapse_rules,
-    )
+    execute_tree_command(state, store_path, repo_slug, collapse_prompts, collapse_rules, repo_only)
 
 
 def _get_state(ctx: typer.Context, *, verbose: bool, skip_sync: bool, force_sync: bool) -> CLIState:
