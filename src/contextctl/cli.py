@@ -38,7 +38,7 @@ from contextctl._internal.commands.tree_cmd import execute_tree_command
 from contextctl._internal.state import CLIState, build_console
 from contextctl._internal.utils import resolve_repo_slug
 
-_SKIP_PREP_COMMANDS: Final[set[str]] = {"init"}
+_SKIP_PREP_COMMANDS: Final[set[str]] = {"init", "version"}
 _RULE_OUTPUT_FORMATS: Final[tuple[str, ...]] = ("text", "json", "cursor")
 _PROMPT_OUTPUT_FORMATS: Final[tuple[str, ...]] = ("text", "json")
 _DEFAULT_PAGE_SIZE: Final[int] = 20
