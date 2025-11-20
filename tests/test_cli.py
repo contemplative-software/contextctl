@@ -297,22 +297,17 @@ def _create_combined_store(root: Path, repo_slug: str) -> Path:
     return store_root
 
 
-def test_version_command_triggers_sync(mocker: MockerFixture) -> None:
-    """Running `contextctl version` should load config and sync the store."""
+def test_version_command_runs_without_preparation(mocker: MockerFixture) -> None:
+    """`contextctl version` should display without requiring repo prep."""
     runner = CliRunner()
     with runner.isolated_filesystem():
-        _prepare_repo_files()
-        sync_mock = mocker.patch("contextctl.cli.sync_central_repo", return_value=Path("/tmp/store"))
+        sync_mock = mocker.patch("contextctl.cli.sync_central_repo")
 
         result = runner.invoke(app, ["version"], catch_exceptions=False)
 
         assert result.exit_code == 0
         assert __version__ in result.stdout
-        sync_mock.assert_called_once_with(
-            "https://example.com/promptlib.git",
-            promptlib_config=ANY,
-            console=ANY,
-        )
+        sync_mock.assert_not_called()
 
 
 def test_cli_reports_missing_repo_configuration() -> None:
@@ -321,7 +316,7 @@ def test_cli_reports_missing_repo_configuration() -> None:
     with runner.isolated_filesystem():
         Path(".git").mkdir()
 
-        result = runner.invoke(app, ["version"], catch_exceptions=False)
+        result = runner.invoke(app, ["rules"], catch_exceptions=False)
 
         assert result.exit_code == 1
         assert "Missing .promptlib.yml" in result.stdout
@@ -331,10 +326,22 @@ def test_cli_respects_no_sync_flag(mocker: MockerFixture) -> None:
     """The --no-sync flag should skip git operations."""
     runner = CliRunner()
     with runner.isolated_filesystem():
-        _prepare_repo_files()
+        Path(".git").mkdir()
+        store_path = _create_rule_store_with_documents(Path())
+        Path(".promptlib.yml").write_text(
+            dedent(
+                """
+                central_repo: https://example.com/library.git
+                rules:
+                  - python
+                """
+            ).strip(),
+            encoding="utf-8",
+        )
         sync_mock = mocker.patch("contextctl.cli.sync_central_repo")
+        mocker.patch("contextctl.cli.get_store_path", return_value=store_path)
 
-        result = runner.invoke(app, ["--no-sync", "version"], catch_exceptions=False)
+        result = runner.invoke(app, ["--no-sync", "rules"], catch_exceptions=False)
 
         assert result.exit_code == 0
         sync_mock.assert_not_called()
@@ -344,10 +351,20 @@ def test_cli_surfaces_sync_errors(mocker: MockerFixture) -> None:
     """Sync failures should be surfaced as styled error messages."""
     runner = CliRunner()
     with runner.isolated_filesystem():
-        _prepare_repo_files()
+        Path(".git").mkdir()
+        Path(".promptlib.yml").write_text(
+            dedent(
+                """
+                central_repo: https://example.com/library.git
+                rules:
+                  - python
+                """
+            ).strip(),
+            encoding="utf-8",
+        )
         mocker.patch("contextctl.cli.sync_central_repo", side_effect=StoreSyncError("network failure"))
 
-        result = runner.invoke(app, ["version"], catch_exceptions=False)
+        result = runner.invoke(app, ["rules"], catch_exceptions=False)
 
         assert result.exit_code == 1
         assert "network failure" in result.stdout
