@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 from textwrap import dedent
-from unittest.mock import ANY
 
 import yaml
 from pytest_mock import MockerFixture
