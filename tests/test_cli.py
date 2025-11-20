@@ -7,10 +7,14 @@ from textwrap import dedent
 
 import yaml
 from pytest_mock import MockerFixture
+from rich.tree import Tree
 from typer.testing import CliRunner
 
 from contextctl import __version__
+from contextctl._internal.output.renderers import _populate_tree_branch
 from contextctl.cli import app
+from contextctl.content import RuleDocument
+from contextctl.models import RuleMetadata
 from contextctl.store import StoreSyncError
 
 
@@ -678,3 +682,36 @@ def test_tree_command_displays_hierarchy_and_repo_filtering(mocker: MockerFixtur
         assert filtered.exit_code == 0
         assert "ops-checklist" not in filtered.stdout
         assert "review-pr" in filtered.stdout
+
+
+def test_tree_branch_does_not_duplicate_directories(tmp_path: Path) -> None:
+    """Tree rendering should only create one node per directory."""
+    base_dir = tmp_path / "rules"
+    python_dir = base_dir / "python"
+    python_dir.mkdir(parents=True)
+
+    style_path = python_dir / "python-style.md"
+    testing_path = python_dir / "python-testing.md"
+    style_path.write_text("---\n", encoding="utf-8")
+    testing_path.write_text("---\n", encoding="utf-8")
+
+    documents = [
+        RuleDocument(
+            metadata=RuleMetadata(id="python-style", tags=["python"], repos=["contextctl"], version="1.0.0"),
+            body="body",
+            path=style_path,
+        ),
+        RuleDocument(
+            metadata=RuleMetadata(id="python-testing", tags=["python"], repos=["contextctl"], version="1.0.1"),
+            body="body",
+            path=testing_path,
+        ),
+    ]
+
+    tree_root = Tree("rules")
+    _populate_tree_branch(tree_root, documents, base_dir=base_dir, repo_slug=None)
+
+    assert len(tree_root.children) == 1
+    python_node = tree_root.children[0]
+    assert str(python_node.label) == "python"
+    assert len(python_node.children) == 2

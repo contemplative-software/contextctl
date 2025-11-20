@@ -243,7 +243,11 @@ def _populate_tree_branch(
         for part in parent_parts:
             accumulated.append(part)
             key = tuple(accumulated)
-            current = node_cache.setdefault(key, current.add(part))
+            if key in node_cache:
+                current = node_cache[key]
+            else:
+                current = current.add(part)
+                node_cache[key] = current
 
         current.add(format_tree_label(document, repo_slug))
 
