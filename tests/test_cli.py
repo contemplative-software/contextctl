@@ -574,7 +574,7 @@ def test_run_command_renders_prompt_with_variables_and_copy(mocker: MockerFixtur
             encoding="utf-8",
         )
         mocker.patch("contextctl.cli.sync_central_repo", return_value=store_path)
-        copy_mock = mocker.patch("contextctl.cli._copy_to_clipboard")
+        copy_mock = mocker.patch("contextctl._internal.commands.run_cmd.copy_to_clipboard")
 
         result = runner.invoke(
             app,
